@@ -1,0 +1,3 @@
+# http server host and port
+host : localhost
+port : 8888
