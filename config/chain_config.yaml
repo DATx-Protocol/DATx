@@ -1,0 +1,8 @@
+#block log dir config
+block_log_dir : block_log
+
+#mode
+read_only : false
+
+#vm type
+vm_type : binaryen
