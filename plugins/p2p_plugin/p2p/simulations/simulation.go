@@ -20,7 +20,7 @@ import (
 	"context"
 	"time"
 
-	"datx_chain/plugins/p2p_plugin/discover"
+	"datx_chain/plugins/p2p_plugin/p2p/discover"
 )
 
 // Simulation provides a framework for running actions in a simulated network

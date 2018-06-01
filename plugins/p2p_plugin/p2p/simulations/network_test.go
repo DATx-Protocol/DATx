@@ -22,8 +22,8 @@ import (
 	"testing"
 	"time"
 
-	"datx_chain/plugins/p2p_plugin/discover"
-	"datx_chain/plugins/p2p_plugin/simulations/adapters"
+	"datx_chain/plugins/p2p_plugin/p2p/discover"
+	"datx_chain/plugins/p2p_plugin/p2p/simulations/adapters"
 )
 
 // TestNetworkSimulation creates a multi-node simulation network with each node

@@ -27,7 +27,7 @@ import (
 	"testing"
 	"time"
 
-	"datx_chain/plugins/p2p_plugin/discover"
+	"datx_chain/plugins/p2p_plugin/p2p/discover"
 )
 
 func TestMocker(t *testing.T) {
