@@ -13,19 +13,19 @@ import (
 
 type Chain_Config struct {
 	//block log dir
-	Block_Log_Dir string `yaml:block_log_dir`
+	Block_Log_Dir string `yaml:"block_log_dir"`
 
 	// //genesis time stamp
-	// Genesis_Time int64 `yaml:genesis_time`
+	// Genesis_Time int64 `yaml:"genesis_time"`
 
 	// //genesis filr path
-	// Genesis_File string `yaml:genesis_file`
+	// Genesis_File string `yaml:"genesis_file"`
 
 	//
-	Read_Only bool `yaml:read_only`
+	Read_Only bool `yaml:"read_only"`
 
 	//vm type
-	VM_Type string `yaml:vm_type`
+	VM_Type string `yaml:"vm_type"`
 }
 
 type chain_plugin struct {
