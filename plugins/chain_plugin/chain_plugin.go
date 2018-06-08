@@ -4,10 +4,10 @@ import (
 	"log"
 	"sync"
 
-	"datx_chain/utils"
+	"datx_chain/chainlib/types"
+	"datx_chain/utils/helper"
 	"datx_chain/utils/message"
 
-	"github.com/golang/leveldb"
 	yaml "gopkg.in/yaml.v2"
 )
 
@@ -24,6 +24,12 @@ type Chain_Config struct {
 	//
 	Read_Only bool `yaml:"read_only"`
 
+	//db handles of open file capacity
+	Handles int `yaml:"handles"`
+
+	//db can cache block capacity
+	Cache int `yaml:"cache"`
+
 	//vm type
 	VM_Type string `yaml:"vm_type"`
 }
@@ -33,7 +39,7 @@ type chain_plugin struct {
 	Config Chain_Config
 
 	//fork db
-	Fork_DB *leveldb.DB
+	Fork_DB *ForkDB
 
 	//chain id
 	Chain_ID string
@@ -46,8 +52,13 @@ type chain_plugin struct {
 }
 
 func (self *chain_plugin) Init() {
+	//catch exception, do nothing if catch exception
+	helper.CatchException(func() {
+		return
+	})
+
 	//unmarshal yaml file
-	err, data := utils.GetFileHelper("chain_config.yaml")
+	err, data := helper.GetFileHelper("chain_config.yaml")
 	if err != nil {
 		log.Printf("chain_plugin init error={%v}", err)
 		return
@@ -61,6 +72,12 @@ func (self *chain_plugin) Init() {
 
 	log.Printf("chain_plugin init config={%v}", config)
 	self.Config = config
+
+	//new fork db
+	self.Fork_DB, err = NewForkDB(self.Config.Block_Log_Dir, self.Config.Cache, self.Config.Handles)
+	if err != nil {
+		log.Printf("chain_plugin init new fork db err={%v}", err)
+	}
 }
 
 func (self *chain_plugin) Open() {
@@ -71,13 +88,13 @@ func (self *chain_plugin) Close() {
 
 }
 
-func (self *chain_plugin) AcceptBlock(block *utils.Block) {
+func (self *chain_plugin) AcceptBlock(block *types.Block) {
 	msg := message.NewMsg(message.BlockMsg, block)
 
 	msg.Send(self.Block_Chan)
 }
 
-func (self *chain_plugin) AccpetTranscation(packed_trx *utils.Transcation) {
+func (self *chain_plugin) AccpetTranscation(packed_trx *types.Transcation) {
 	msg := message.NewMsg(message.TrxMsg, packed_trx)
 
 	msg.Send(self.Trx_Chan)

@@ -1,7 +1,7 @@
 package http_plugin
 
 import (
-	"datx_chain/utils"
+	"datx_chain/utils/helper"
 	"log"
 	"net/http"
 	"time"
@@ -44,7 +44,7 @@ func NewHttpPlugin() *Http_plugin {
 func (p *Http_plugin) Init() {
 	log.Println("Http server initialize")
 
-	err, data := utils.GetFileHelper("http_config.yaml")
+	err, data := helper.GetFileHelper("http_config.yaml")
 	if err != nil {
 		log.Printf("err %s", err)
 		return

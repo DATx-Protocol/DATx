@@ -4,5 +4,11 @@ block_log_dir : block_log
 #mode
 read_only : false
 
+#db handle open file cache capacity
+handles : 0
+
+#db can cache block capacity
+cache : 0
+
 #vm type
 vm_type : binaryen

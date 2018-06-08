@@ -1,7 +1,7 @@
 package chain_plugin
 
 import (
-	"chain/utils"
+	"datx_chain/chainlib/types"
 	"fmt"
 	"os"
 	"strings"
@@ -35,9 +35,9 @@ func Test_NewForkDB(t *testing.T) {
 	defer db.Close()
 }
 
-func NewBlock(num, pre uint32, prod string) *utils.Block {
-	return &utils.Block{
-		BlockHeader: *utils.MakeBlockHeader(num, pre, prod),
+func NewBlock(num, pre uint32, prod string) *types.Block {
+	return &types.Block{
+		BlockHeader: *types.MakeBlockHeader(num, pre, prod),
 	}
 }
 

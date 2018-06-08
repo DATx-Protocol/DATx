@@ -1,16 +1,16 @@
 package chain_plugin
 
 import (
-	"chain/utils"
-	"chain/utils/common"
-	"chain/utils/db"
-	"chain/utils/rlp"
+	"datx_chain/chainlib/types"
+	"datx_chain/utils/common"
+	"datx_chain/utils/db"
+	"datx_chain/utils/rlp"
 	"fmt"
 	"os"
 	"sync"
 )
 
-type BranchType []*utils.Block
+type BranchType []*types.Block
 
 type ForkDB struct {
 	//data dir
@@ -29,7 +29,7 @@ type ForkDB struct {
 	index map[uint32]common.Hash
 
 	//the lastest block state
-	head *utils.BlockHeader
+	head *types.BlockHeader
 
 	//read/write lock
 	rdlock sync.RWMutex
@@ -64,7 +64,7 @@ func NewForkDB(path string, cache, handles int) (*ForkDB, error) {
 	//create index map
 	for iter.First(); iter.Valid(); iter.Next() {
 		val := iter.Value()
-		var block utils.Block
+		var block types.Block
 		if err := rlp.DecodeBytes(val, &block); err != nil {
 			fmt.Printf("NewForkDB Decode block: #{%v}", err)
 			return nil, err
@@ -76,7 +76,7 @@ func NewForkDB(path string, cache, handles int) (*ForkDB, error) {
 
 	//unmarshal last block to head
 	if iter.Last() == true && iter.Valid() {
-		var block utils.Block
+		var block types.Block
 		err := rlp.DecodeBytes(iter.Value(), &block)
 		if err != nil {
 			fmt.Printf("ForkDB::NewForkDB err={%v} ", err)
@@ -107,7 +107,7 @@ func (self *ForkDB) ClearAll() {
 	}
 }
 
-func (self *ForkDB) Add(block *utils.Block) {
+func (self *ForkDB) Add(block *types.Block) {
 	defer func() {
 		if err := recover(); err != nil {
 			fmt.Printf("ForkDB::Add exception: %s\n", err)
@@ -160,7 +160,7 @@ func (self *ForkDB) Delete(id common.Hash) {
 		return
 	}
 
-	var block utils.Block
+	var block types.Block
 	if err := rlp.DecodeBytes(data, &block); err != nil {
 		fmt.Printf("ForkDB::Delete block id={%v} err={%v}\n", key, err)
 		return
@@ -181,7 +181,7 @@ func (self *ForkDB) Delete(id common.Hash) {
 	self.db.Delete(key)
 }
 
-func (self *ForkDB) GetBlock(id common.Hash) *utils.Block {
+func (self *ForkDB) GetBlock(id common.Hash) *types.Block {
 	key := id.Bytes()
 
 	//if not exist,return nil
@@ -191,7 +191,7 @@ func (self *ForkDB) GetBlock(id common.Hash) *utils.Block {
 		return nil
 	}
 
-	var block utils.Block
+	var block types.Block
 	if err := rlp.DecodeBytes(data, &block); err != nil {
 		fmt.Printf("ForkDB::GetBlock decode block id={%s} err={%v}", id.Hex(), err)
 		return nil
@@ -200,7 +200,7 @@ func (self *ForkDB) GetBlock(id common.Hash) *utils.Block {
 	return &block
 }
 
-func (self *ForkDB) GetBlockByNum(num uint32) *utils.Block {
+func (self *ForkDB) GetBlockByNum(num uint32) *types.Block {
 	//find num existence,return nil if not exist or occured error
 	if key, ok := self.index[num]; ok {
 		id := key.Bytes()
@@ -210,7 +210,7 @@ func (self *ForkDB) GetBlockByNum(num uint32) *utils.Block {
 			return nil
 		}
 
-		var block utils.Block
+		var block types.Block
 		if err := rlp.DecodeBytes(bytes, block); err != nil {
 			fmt.Printf("ForkDB::GetBlockByNum decode block id={%s} err={%v}", key.Hex(), err)
 			return nil
@@ -223,7 +223,7 @@ func (self *ForkDB) GetBlockByNum(num uint32) *utils.Block {
 	}
 }
 
-func (self *ForkDB) GetHead() *utils.BlockHeader {
+func (self *ForkDB) GetHead() *types.BlockHeader {
 	return self.head
 }
 

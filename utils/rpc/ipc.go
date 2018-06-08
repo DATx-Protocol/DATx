@@ -20,8 +20,8 @@ import (
 	"context"
 	"net"
 
+	"datx_chain/plugins/p2p_plugin/p2p/netutil"
 	"datx_chain/utils/log"
-	"github.com/ethereum/go-ethereum/p2p/netutil"
 )
 
 // ServeListener accepts connections on l, serving JSON-RPC on them.

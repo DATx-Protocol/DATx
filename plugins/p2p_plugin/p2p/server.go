@@ -15,7 +15,7 @@
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
 // package p2p_plugin implements the Ethereum p2p network protocols.
-package p2p_plugin
+package p2p
 
 import (
 	"crypto/ecdsa"
@@ -25,13 +25,14 @@ import (
 	"sync"
 	"time"
 
-	"datx_chain/plugins/p2p_plugin/discover"
-	"datx_chain/plugins/p2p_plugin/discv5"
-	"datx_chain/plugins/p2p_plugin/nat"
-	"datx_chain/plugins/p2p_plugin/netutil"
+	"datx_chain/plugins/p2p_plugin/p2p/discover"
+	"datx_chain/plugins/p2p_plugin/p2p/discv5"
+	"datx_chain/plugins/p2p_plugin/p2p/nat"
+	"datx_chain/plugins/p2p_plugin/p2p/netutil"
+	"datx_chain/plugins/p2p_plugin/p2p/protocols"
+	"datx_chain/utils/common"
 	"datx_chain/utils/common/mclock"
 
-	"datx_chain/utils/common"
 	"datx_chain/utils/event"
 	"datx_chain/utils/log"
 )
@@ -114,7 +115,7 @@ type Config struct {
 	// Protocols should contain the protocols supported
 	// by the server. Matching protocols are launched for
 	// each peer.
-	Protocols []Protocol `toml:"-"`
+	Protocols []protocols.Protocol `toml:"-"`
 
 	// If ListenAddr is set to a non-nil address, the server
 	// will listen for incoming connections.
