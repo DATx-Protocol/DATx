@@ -20,7 +20,22 @@ import (
 func GetCurrentPath() string {
 	file, _ := exec.LookPath(os.Args[0])
 	path, _ := filepath.Abs(file)
-	return path
+
+	if len(path) == 0 {
+		return path
+	}
+
+	ins := strings.Split(path, string(os.PathSeparator))
+	return strings.Join(ins[:len(ins)-2], string(os.PathSeparator))
+}
+
+func MakePath(path ...string) string {
+	first := GetCurrentPath()
+	for _, v := range path {
+		first = first + string(os.PathSeparator) + v
+	}
+
+	return first
 }
 
 //open file and return file data, support arbitrary type of file on config dir
@@ -43,10 +58,7 @@ func GetFileHelper(config string) (error, []byte) {
 		return errors.New(fmt.Sprintf("config={%s} suffix is not yaml", config)), nil
 	}
 
-	ins := strings.Split(CurrentPath, string(os.PathSeparator))
-
-	ps := append(ins[:len(ins)-2], "config", config)
-	configpath := strings.Join(ps, string(os.PathSeparator))
+	configpath := MakePath("config", config)
 	log.Printf("Config={%s} path={%s}", config, configpath)
 
 	//check file exist or not

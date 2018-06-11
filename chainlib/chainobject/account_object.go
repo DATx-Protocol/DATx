@@ -8,57 +8,57 @@ import (
 
 type AccountObject struct {
 	//the global id of account object
-	id uint64
+	Id uint64
 
 	//account name
-	name string
+	Name string
 
 	//vm type
-	vm_type uint8
+	Vm_type uint8
 
 	//vm version
-	vm_version uint8
+	Vm_version uint8
 
 	//
-	privileged bool
+	Privileged bool
 
 	//the time of updating smart contract
-	last_code_update time.Time
+	Last_code_update time.Time
 
 	//the hash code of smart contract
-	code_version common.Hash
+	Code_version common.Hash
 
 	//the creation time of smart contract
-	creation_date time.Time
+	Creation_date time.Time
 
 	//the code of smart contract
-	code []byte
+	Code []byte
 
 	//the abi of smart contract
-	abi []byte
+	Abi []byte
 }
 
 func NewAccount(name string) *AccountObject {
 	return &AccountObject{
-		id:         helper.GetOID(),
-		name:       name,
-		vm_type:    0,
-		vm_version: 0,
-		privileged: false,
+		Id:         helper.GetOID(),
+		Name:       name,
+		Vm_type:    0,
+		Vm_version: 0,
+		Privileged: false,
 	}
 }
 
 func (self *AccountObject) ID() uint64 {
-	return self.id
+	return self.Id
 }
 
 func (self *AccountObject) SetCode(code []byte) {
-	self.code = code
+	self.Code = code
 	// self.code_version = utils.RLPHash(self.code)
-	self.creation_date = time.Now()
-	self.last_code_update = time.Now()
+	self.Creation_date = time.Now()
+	self.Last_code_update = time.Now()
 }
 
 func (self *AccountObject) SetAbi(abi []byte) {
-	self.abi = abi
+	self.Abi = abi
 }

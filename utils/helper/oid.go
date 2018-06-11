@@ -13,12 +13,13 @@ type oid struct {
 }
 
 func (self *oid) add() uint64 {
-	raw := atomic.LoadUint64(&self.id)
-
-	id, ok := math.SafeAdd(raw, 1)
+	//check whether occurred overflow
+	_, ok := math.SafeAdd(self.id, 1)
 	if ok {
 		return 0
 	}
+	//add 1 to id atomic
+	id := atomic.AddUint64(&self.id, 1)
 
 	return id
 }
@@ -30,7 +31,7 @@ var once sync.Once
 func GetOID() uint64 {
 	once.Do(func() {
 		guid = &oid{
-			id: 1,
+			id: 0,
 		}
 	})
 
