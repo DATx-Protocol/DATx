@@ -9,7 +9,7 @@ import (
 	"sync"
 )
 
-//test git
+//test chain api
 type Chain_API struct {
 	//chain controller db,temp init to int ,it will change next time.
 	Fork_DB *ForkDB
