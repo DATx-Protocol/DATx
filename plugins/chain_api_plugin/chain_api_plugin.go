@@ -1,24 +1,30 @@
 package chain_api_plugin
+
 import (
+	"datx_chain/plugins/chain_plugin"
+	"datx_chain/plugins/http_plugin"
 	"log"
 	"net/http"
 	"reflect"
 	"sync"
-	"datx_chain/plugins/chain_plugin"
-	"datx_chain/plugins/http_plugin"
 )
+
+//test git
 type Chain_API struct {
 	//chain controller db,temp init to int ,it will change next time.
 	Fork_DB *ForkDB
 }
+
 func (self *Chain_API) get_chain_plugin_type(instance interface{}) interface{} {
 	log.Println("get Chain_plugin_Type.")
 	chain_plugin_type := reflect.TypeOf(instance)
 	log.Println(chain_plugin_type)
 	return chain_plugin_type
 }
+
 var chain_plugin_instance = chain_plugin.GetInstance()
 var once sync.Once
+
 func Init() {
 	once.Do(func() {
 		chain_plugin_instance.Init()
