@@ -1,9 +1,11 @@
 package utils
 
 import (
-	"chain/utils/common"
-	"chain/utils/crypto/sha3"
-	"chain/utils/rlp"
+	"DATx/utils/common"
+	"DATx/utils/crypto"
+	"DATx/utils/crypto/sha3"
+
+	"DATx/utils/rlp"
 )
 
 type BlockHeader struct {
@@ -21,6 +23,12 @@ type BlockHeader struct {
 
 	//producer signature
 	Signature string
+
+	//the root of action merkle tree
+	ActionMroot common.Hash
+
+	//the root of transaction merkle tree
+	TransactionMroot common.Hash
 }
 
 type Block struct {
@@ -28,7 +36,7 @@ type Block struct {
 	BlockHeader
 
 	//transcation pool
-	Transcations []*Transcation
+	Transactions []*Transaction
 }
 
 func rlpHash(x interface{}) (h common.Hash) {
@@ -75,4 +83,25 @@ func (self *Block) GetPrevious() uint32 {
 
 func (self *Block) GetHead() *BlockHeader {
 	return &self.BlockHeader
+}
+
+func (self *Block) TransactionMerkle() common.Hash {
+	var ids = self.Transactions
+	if ids == nil {
+		return common.HexToHash("")
+	}
+	for len(ids) > 1 {
+		if len(ids)%2 == 0 {
+			ids = append(ids, ids[len(ids)-1])
+		}
+		for i := 0; i < len(ids)/2; i++ {
+			ids[i].TransactionHash = crypto.Keccak256Hash(ids[2*i].TransactionHash.Bytes(), ids[(2*i)+1].TransactionHash.Bytes())
+		}
+	}
+	return ids[0].TransactionHash
+}
+
+func (self *Block) GetTransactionMroot() common.Hash {
+	self.TransactionMroot = self.TransactionMerkle()
+	return self.TransactionMroot
 }
