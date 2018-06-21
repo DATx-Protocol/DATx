@@ -1,0 +1,6 @@
+#block log dir config
+PrivateKey : 112350326689685529176416839667165445850930628506430118257577941014994870680344
+MaxPeers : 256
+ProtoclVersion : [1,2]
+NetworkId : 12
+listenAddr : "0.0.0.0:34234"
