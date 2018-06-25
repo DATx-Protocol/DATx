@@ -3,13 +3,11 @@ package p2p_plugin
 import (
 	"crypto/ecdsa"
 	"errors"
-	"fmt"
-	"math/big"
 	"sync"
 	"time"
 
-	"datx_chain/utils/common"
-	"datx_chain/utils/rlp"
+	"datx_chain/chainlib/types"
+	"datx_chain/plugins/p2p_plugin/p2p"
 )
 
 var (
@@ -19,23 +17,24 @@ var (
 )
 
 type TransactionState struct {
-	id chainlib.type.TransactionId,
-	expireTime time.Time,
-	blockNum	uint32
+	id         types.TransactionId
+	expireTime time.Time
+	blockNum   uint32
 }
 
 type SyncBlockState struct {
-	startBlockNum uint32,
-	endBlockNum uint32,
-	lastSyncBlockNum uint32,
-	startSyncTime time.Time,
-	syncing bool,
-	connecting bool,
-	forkHead BlockIdType,
-	forkHeadNum uint32
+	startBlockNum    uint32
+	endBlockNum      uint32
+	lastSyncBlockNum uint32
+	startSyncTime    time.Time
+	syncing          bool
+	connecting       bool
+	forkHead         types.BlockIdType
+	forkHeadNum      uint32
 }
 
 type peer struct {
+	id string
 	*p2p.Peer
 	pubKey *ecdsa.PublicKey
 
@@ -43,8 +42,6 @@ type peer struct {
 
 	version int    // Protocol version negotiated
 	network uint64 // Network ID being on
-
-	
 }
 
 func newPeer(version int, network uint64, p *p2p.Peer, rw p2p.MsgReadWriter) *peer {
@@ -52,25 +49,40 @@ func newPeer(version int, network uint64, p *p2p.Peer, rw p2p.MsgReadWriter) *pe
 	pubKey, _ := id.Pubkey()
 
 	return &peer{
-		Peer:        p,
-		pubKey:      pubKey,
-		rw:          rw,
-		version:     version,
-		network:     network,
+		Peer:    p,
+		pubKey:  pubKey,
+		rw:      rw,
+		version: version,
+		network: network,
 	}
 }
 
 type peerSet struct {
-	peers      map[string]*peer
-	lock       sync.RWMutex
-	closed     bool
+	peers  map[string]*peer
+	lock   sync.RWMutex
+	closed bool
 }
-
 
 func newPeerSet() *peerSet {
 	return &peerSet{
 		peers: make(map[string]*peer),
 	}
+}
+
+// Peer retrieves the registered peer with the given id.
+func (ps *peerSet) Peer(id string) *peer {
+	ps.lock.RLock()
+	defer ps.lock.RUnlock()
+
+	return ps.peers[id]
+}
+
+// Len returns if the current number of peers in the set.
+func (ps *peerSet) Len() int {
+	ps.lock.RLock()
+	defer ps.lock.RUnlock()
+
+	return len(ps.peers)
 }
 
 // Register injects a new peer into the working set, or returns an error if the
@@ -119,4 +131,14 @@ func (ps *peerSet) AllPeerIDs() []string {
 		idx++
 	}
 	return res
+}
+
+func (ps *peerSet) Close() {
+	ps.lock.Lock()
+	defer ps.lock.Unlock()
+
+	for _, p := range ps.peers {
+		p.Disconnect(p2p.DiscQuitting)
+	}
+	ps.closed = true
 }

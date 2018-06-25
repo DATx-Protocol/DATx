@@ -213,6 +213,8 @@ func makeDecoder(typ reflect.Type, tags tags) (dec decoder, err error) {
 		return decodeString, nil
 	case kind == reflect.Slice || kind == reflect.Array:
 		return makeListDecoder(typ, tags)
+	case kind == reflect.Map:
+		return makeMapDecoder(typ)
 	case kind == reflect.Struct:
 		return makeStructDecoder(typ)
 	case kind == reflect.Ptr:
@@ -446,6 +448,66 @@ func makeStructDecoder(typ reflect.Type) (decoder, error) {
 				return addErrorContext(err, "."+typ.Field(f.index).Name)
 			}
 		}
+		return wrapStreamError(s.ListEnd(), typ)
+	}
+	return dec, nil
+}
+
+func makeMapDecoder(typ reflect.Type) (decoder, error) {
+	var ts tags
+
+	var mapkeys []reflect.Type
+	mapkeys = append(mapkeys, typ.Key())
+	mapkeys = append(mapkeys, typ.Elem())
+
+	dec := func(s *Stream, val reflect.Value) (err error) {
+		if _, err := s.List(); err != nil {
+			return wrapStreamError(err, typ)
+		}
+
+		defer func() {
+			if rerr := recover(); rerr != nil {
+				err = rerr.(error)
+			}
+		}()
+
+		for {
+			key := ""
+			kval := reflect.ValueOf(&key).Elem()
+			if mapkeys[0].Kind() == reflect.String {
+				info, ierr := cachedTypeInfo(mapkeys[0], ts)
+				if ierr != nil {
+					return ierr
+				}
+
+				err := info.decoder(s, kval)
+				if err == EOL {
+					break
+				} else if err != nil {
+					return addErrorContext(err, "."+mapkeys[0].Name())
+				}
+			}
+
+			var value interface{}
+			vval := reflect.ValueOf(&value).Elem()
+			if mapkeys[1].Kind() == reflect.Interface {
+				info, ierr := cachedTypeInfo(mapkeys[1], ts)
+				if ierr != nil {
+					return ierr
+				}
+
+				err := info.decoder(s, vval)
+				if err == EOL {
+					val.SetMapIndex(kval, vval)
+					break
+				} else if err != nil {
+					return addErrorContext(err, "."+mapkeys[1].Name())
+				}
+			}
+
+			val.SetMapIndex(kval, vval)
+		}
+
 		return wrapStreamError(s.ListEnd(), typ)
 	}
 	return dec, nil

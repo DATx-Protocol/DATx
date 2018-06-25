@@ -18,16 +18,9 @@
 package p2p_plugin
 
 import (
-	"time"
-	"bytes"
-	"errors"
-	"fmt"
-	"io"
-	"math/big"
 	"datx_chain/utils/common"
-	"datx_chain/utils/rlp"
+	"time"
 )
-
 
 // Constants to match up protocol versions and messages
 const (
@@ -51,14 +44,14 @@ const (
 )
 
 const (
-	StatusMsg         = 0x00
-	AnnounceMsg       = 0x01 //获取chain_size_message
-	TimeMsg           = 0x02 //
-	NoticeMsg         = 0x03
-	RequestMsg        = 0x04
-	SyncRequestMsg    = 0x05
-	SignedBlock       = 0x06
-	PackedTransaction = 0x07
+	MsgTypeStatusMsg         = 0x00
+	MsgTypeAnnounceMsg       = 0x01 //获取chain_size_message
+	MsgTypeTimeMsg           = 0x02 //
+	MsgTypeNoticeMsg         = 0x03
+	MsgTypeRequestMsg        = 0x04
+	MsgTypeSyncRequestMsg    = 0x05
+	MsgTypeSignedBlock       = 0x06
+	MsgTypePackedTransaction = 0x07
 )
 
 type errCode int
@@ -67,7 +60,7 @@ const (
 	ErrNoReason = iota
 	ErrConnectSelf
 	ErrDuplicate
-	ErrInvalidNetwork 
+	ErrInvalidNetwork
 	ErrInValidCersion
 	ErrForkedChain
 	ErrUnLinkable
@@ -84,61 +77,59 @@ func (e errCode) String() string {
 
 // XXX change once legacy code is out
 var errorToString = map[int]string{
-	ErrNoReason:"no reason",
-	ErrConnectSelf:"self connect",
-	ErrDuplicate:"duplicate",
-	ErrInvalidNetwork:"wrong chain",
-	ErrInValidCersion:"wrong version",
-	ErrForkedChain:"chain is forked",
-	ErrUnLinkable:"unlinkable block received",
-	ErrInvalidTransact:"bad transaction",
-	ErrInvalidBlock:"invalid block",
-	ErrBeningOther:"some other non-fatal condition",
-	ErrOtherFatal:"some other failure",
-	ErrAuthentication:"authentication failure"
+	ErrNoReason:           "no reason",
+	ErrConnectSelf:        "self connect",
+	ErrDuplicate:          "duplicate",
+	ErrInvalidNetwork:     "wrong chain",
+	ErrInValidCersion:     "wrong version",
+	ErrForkedChain:        "chain is forked",
+	ErrUnLinkable:         "unlinkable block received",
+	ErrInvalidTransaction: "bad transaction",
+	ErrInvalidBlock:       "invalid block",
+	ErrBeningOther:        "some other non-fatal condition",
+	ErrOtherFatal:         "some other failure",
+	ErrAuthentication:     "authentication failure",
 }
 
-
 type ChainSizeMsg struct {
-	lastIrreversibleBlockNum uint32  ,
-	lastIrreversibleBlockId common.Hash,
-	headNum uint32,
-	headId common.Hash
-
+	lastIrreversibleBlockNum uint32
+	lastIrreversibleBlockId  common.Hash
+	headNum                  uint32
+	headId                   common.Hash
 }
 
 type HandShakeMsg struct {
-	networkVersion uint16
-	networkId	uint32
-	timeStamp	time.Time
-	token		common.Hash
-	sigature	common.Hash
-	lastIrreversibleBlockNum	uint32
-	lastIrreversibleBlockId	common.Hash
-	headNum	uint32
-	headId	common.Hash
-	os	string
-	agent string
-	generation  int16
-
+	networkVersion           uint16
+	networkId                uint32
+	timeStamp                time.Time
+	token                    common.Hash
+	sigature                 common.Hash
+	lastIrreversibleBlockNum uint32
+	lastIrreversibleBlockId  common.Hash
+	headNum                  uint32
+	headId                   common.Hash
+	os                       string
+	agent                    string
+	generation               int16
 }
+
+type IdListMode int16
+
+const (
+	None = iota
+	CatchUp
+	lastIrrCatchUp
+	Normal
+)
 
 type SelectIds struct {
-	type IdListMode int16 
-	const (
-		None = iota
-		CatchUp
-		lastIrrCatchUp
-		Normal
-	)
-
-	mode IdListMode,
-	pending uint32,
-	ids [] struct {}
+	mode    IdListMode
+	pending uint32
+	ids     []struct{}
 }
 
-(s *SelectIds) func () bool {
-	return s.mode == SelectIds.None || len(s.ids) == 0 
+func (s *SelectIds) Empty() bool {
+	return s.mode == None || len(s.ids) == 0
 }
 
 type DisconnectMsg struct {
@@ -146,23 +137,23 @@ type DisconnectMsg struct {
 }
 
 type TimeMsg struct {
-	orginTime time.Time,
-	recvTime  time.Time,
-	transmitTime  time.Time,
+	orginTime       time.Time
+	recvTime        time.Time
+	transmitTime    time.Time
 	destinationTime time.Time
 }
 
 type NoticeMsg struct {
-	txIds SelectIds,
-	blkIds selectIds,
+	txIds  SelectIds
+	blkIds SelectIds
 }
 
-type RequestMsg struct{
-	txIds SelectIds,
+type RequestMsg struct {
+	txIds  SelectIds
 	blkIds SelectIds
 }
 
 type SyncRequestMsg struct {
-	startBlkNum uint32,
-	endBlkNum uint32
+	startBlkNum uint32
+	endBlkNum   uint32
 }

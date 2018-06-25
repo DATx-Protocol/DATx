@@ -65,6 +65,7 @@ const (
 	seedMaxAge         = 5 * 24 * time.Hour
 )
 
+// Table store p2p table
 type Table struct {
 	mutex   sync.Mutex        // protects buckets, bucket content, nursery, rand
 	buckets [nBuckets]*bucket // index of known nodes by distance

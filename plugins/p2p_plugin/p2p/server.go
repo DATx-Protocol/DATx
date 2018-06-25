@@ -29,7 +29,6 @@ import (
 	"datx_chain/plugins/p2p_plugin/p2p/discv5"
 	"datx_chain/plugins/p2p_plugin/p2p/nat"
 	"datx_chain/plugins/p2p_plugin/p2p/netutil"
-	"datx_chain/plugins/p2p_plugin/p2p/protocols"
 	"datx_chain/utils/common"
 	"datx_chain/utils/common/mclock"
 
@@ -115,7 +114,7 @@ type Config struct {
 	// Protocols should contain the protocols supported
 	// by the server. Matching protocols are launched for
 	// each peer.
-	Protocols []protocols.Protocol `toml:"-"`
+	Protocols []Protocol `toml:"-"`
 
 	// If ListenAddr is set to a non-nil address, the server
 	// will listen for incoming connections.
