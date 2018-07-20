@@ -1,8 +1,8 @@
 package application
 
 import (
-	"datx_chain/plugins/chain_plugin"
-	"datx_chain/plugins/http_plugin"
+	"DATx/plugins/chain_plugin"
+	"DATx/plugins/http_plugin"
 	"errors"
 	"fmt"
 	"sync"

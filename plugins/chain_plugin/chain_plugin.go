@@ -4,9 +4,9 @@ import (
 	"log"
 	"sync"
 
-	"datx_chain/chainlib/types"
-	"datx_chain/utils/helper"
-	"datx_chain/utils/message"
+	"DATx/chainlib/types"
+	"DATx/utils/helper"
+	"DATx/utils/message"
 
 	yaml "gopkg.in/yaml.v2"
 )

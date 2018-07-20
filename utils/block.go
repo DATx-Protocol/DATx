@@ -2,9 +2,7 @@ package utils
 
 import (
 	"DATx/utils/common"
-	"DATx/utils/crypto"
 	"DATx/utils/crypto/sha3"
-
 	"DATx/utils/rlp"
 )
 
@@ -85,23 +83,23 @@ func (self *Block) GetHead() *BlockHeader {
 	return &self.BlockHeader
 }
 
-func (self *Block) TransactionMerkle() common.Hash {
-	var ids = self.Transactions
-	if ids == nil {
-		return common.HexToHash("")
-	}
-	for len(ids) > 1 {
-		if len(ids)%2 == 0 {
-			ids = append(ids, ids[len(ids)-1])
-		}
-		for i := 0; i < len(ids)/2; i++ {
-			ids[i].TransactionHash = crypto.Keccak256Hash(ids[2*i].TransactionHash.Bytes(), ids[(2*i)+1].TransactionHash.Bytes())
-		}
-	}
-	return ids[0].TransactionHash
-}
+// func (self *Block) TransactionMerkle() common.Hash {
+// 	var ids = self.Transactions
+// 	if ids == nil {
+// 		return common.HexToHash("")
+// 	}
+// 	for len(ids) > 1 {
+// 		if len(ids)%2 == 0 {
+// 			ids = append(ids, ids[len(ids)-1])
+// 		}
+// 		for i := 0; i < len(ids)/2; i++ {
+// 			ids[i].TransactionHash = crypto.Keccak256Hash(ids[2*i].TransactionHash.Bytes(), ids[(2*i)+1].TransactionHash.Bytes())
+// 		}
+// 	}
+// 	return ids[0].TransactionHash
+// }
 
-func (self *Block) GetTransactionMroot() common.Hash {
-	self.TransactionMroot = self.TransactionMerkle()
-	return self.TransactionMroot
-}
+// func (self *Block) GetTransactionMroot() common.Hash {
+// 	self.TransactionMroot = self.TransactionMerkle()
+// 	return self.TransactionMroot
+// }
