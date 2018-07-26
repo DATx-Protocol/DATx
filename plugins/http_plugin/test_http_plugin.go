@@ -1,12 +1,13 @@
-package http_plugin
+package httpplugin
 
 import (
 	"log"
 	"net/http"
 )
 
-func TestDefaultHttpServer() {
-	testServer := NewHttpPlugin()
+//TestDefaultHTTPServer test
+func TestDefaultHTTPServer() {
+	testServer := NewHTTPPlugin()
 
 	//start your http server based on http_plugin.yaml
 	testServer.Init()
@@ -23,8 +24,9 @@ func TestDefaultHttpServer() {
 	testServer.AddHandler("/get_info", TestHelloHandler, "get")
 }
 
-func TestHttpServer(host string, port string) {
-	testServer := NewHttpPlugin()
+//TestHTTPServer test
+func TestHTTPServer(host string, port string) {
+	testServer := NewHTTPPlugin()
 
 	//start your http server based on passed parameter
 	testServer.InitWithEndpoint(host, port)

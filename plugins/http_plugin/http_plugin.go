@@ -1,6 +1,7 @@
-package http_plugin
+package httpplugin
 
 import (
+	"datx_chain/chainlib/application"
 	"datx_chain/utils/helper"
 	"log"
 	"net/http"
@@ -10,17 +11,20 @@ import (
 	yaml "gopkg.in/yaml.v2"
 )
 
-type HttpHandler func(w http.ResponseWriter, r *http.Request)
+//HTTPHandler func
+type HTTPHandler func(w http.ResponseWriter, r *http.Request)
 
-type Http_Config struct {
+//HTTPConfig config
+type HTTPConfig struct {
 	//host address
-	Host string `yaml:host`
+	Host string `yaml:"host"`
 
 	//listen port
-	Port string `yaml:port`
+	Port string `yaml:"port"`
 }
 
-type Http_plugin struct {
+//HTTPPlugin struct
+type HTTPPlugin struct {
 	//http server address
 	Host string
 
@@ -34,29 +38,31 @@ type Http_plugin struct {
 	Server *http.Server
 }
 
-func NewHttpPlugin() *Http_plugin {
-	p := &Http_plugin{
+//NewHTTPPlugin new
+func NewHTTPPlugin() *HTTPPlugin {
+	p := &HTTPPlugin{
 		NewRouter: mux.NewRouter(),
 	}
 	return p
 }
 
-func (p *Http_plugin) Init() {
-	log.Println("Http server initialize")
+//Init init
+func (p *HTTPPlugin) Init() error {
+	log.Println("HTTP server initialize")
 
-	err, data := helper.GetFileHelper("http_config.yaml")
+	err, data := helper.GetFileHelper("http_config.yaml", application.App().GetConfigFolder())
 	if err != nil {
 		log.Printf("err %s", err)
-		return
+		return err
 	}
 
-	var conf Http_Config
+	var conf HTTPConfig
 	if err := yaml.Unmarshal(data, &conf); err != nil {
 		log.Printf("chain_plugin init unmarshal config  error={%v}", err)
-		return
+		return err
 	}
 
-	log.Printf("Http server init config=%v", conf)
+	log.Printf("HTTP server init config=%v", conf)
 
 	p.Host = conf.Host
 	p.Port = conf.Port
@@ -68,10 +74,12 @@ func (p *Http_plugin) Init() {
 		ReadTimeout:  15 * time.Second,
 	}
 	p.Server = srv
+	return nil
 }
 
-func (p *Http_plugin) InitWithEndpoint(host string, port string) {
-	log.Println("Http server initialize")
+//InitWithEndpoint init with host and port
+func (p *HTTPPlugin) InitWithEndpoint(host string, port string) {
+	log.Println("HTTP server initialize")
 
 	p.Host = host
 	p.Port = port
@@ -85,28 +93,42 @@ func (p *Http_plugin) InitWithEndpoint(host string, port string) {
 	p.Server = srv
 }
 
-func (p *Http_plugin) Open() {
-	log.Println("Http server start")
+//Open open plugin
+func (p *HTTPPlugin) Open() (err error) {
+	log.Println("HTTP server start")
 
 	// Run our server in a goroutine so that it doesn't block.
 	go func() {
-		if err := p.Server.ListenAndServe(); err != nil {
-			log.Println(err)
+		if nerr := p.Server.ListenAndServe(); nerr != nil {
+			log.Println(nerr)
+			err = nerr
 		}
 	}()
-
+	p.RegisterHandler()
+	return nil
 }
 
-func (p *Http_plugin) Close() {
+//Close close plugin
+func (p *HTTPPlugin) Close() {
 	p.Server.Close()
 
-	log.Println("Http server closed")
+	log.Println("HTTP server closed")
 }
 
-func (p *Http_plugin) AddHandler(url string, handler HttpHandler, methods ...string) {
+//AddHandler add handler
+func (p *HTTPPlugin) AddHandler(url string, handler HTTPHandler, methods ...string) {
 	if len(url) == 0 || handler == nil {
 		return
 	}
 
 	p.NewRouter.HandleFunc(url, handler).Methods(methods...)
+}
+
+//RegisterHandler register all handler
+func (p *HTTPPlugin) RegisterHandler() {
+	p.AddHandler("/transfer", TransferHandle, "GET", "POST")
+	p.AddHandler("/transaction_list", GetTransactionListHandle, "GET", "POST")
+	p.AddHandler("/transaction_query_hash", GetTransactionByHashHandle, "GET", "POST")
+	p.AddHandler("/blocks_list", GetBlockListHandle, "GET", "POST")
+	p.AddHandler("/general_info", GetGeneralInfo, "GET", "POST")
 }
