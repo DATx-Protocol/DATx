@@ -1,114 +1,94 @@
-package chain_plugin
+package chainplugin
 
 import (
+	"datx_chain/chainlib/application"
+	"datx_chain/chainlib/controller"
+	"datx_chain/utils/common"
+	"datx_chain/utils/helper"
+	"fmt"
 	"log"
-	"sync"
-
-	"DATx/chainlib/types"
-	"DATx/utils/helper"
-	"DATx/utils/message"
 
 	yaml "gopkg.in/yaml.v2"
 )
 
-type Chain_Config struct {
-	//block log dir
-	Block_Log_Dir string `yaml:"block_log_dir"`
-
-	// //genesis time stamp
-	// Genesis_Time int64 `yaml:"genesis_time"`
-
-	// //genesis filr path
-	// Genesis_File string `yaml:"genesis_file"`
-
-	//
-	Read_Only bool `yaml:"read_only"`
-
-	//db handles of open file capacity
-	Handles int `yaml:"handles"`
-
-	//db can cache block capacity
-	Cache int `yaml:"cache"`
-
-	//vm type
-	VM_Type string `yaml:"vm_type"`
-}
-
-type chain_plugin struct {
+//ChainPlugin struct
+type ChainPlugin struct {
 	//default config
-	Config Chain_Config
+	Config controller.CtlConfig
 
-	//fork db
-	Fork_DB *ForkDB
+	chain *controller.Controller
 
 	//chain id
-	Chain_ID string
-
-	//accept block chan
-	Block_Chan chan *message.Msg
-
-	//accept transcation chan
-	Trx_Chan chan *message.Msg
+	chainID common.Hash
 }
 
-func (self *chain_plugin) Init() {
+//NewChainPlugin new
+func NewChainPlugin() *ChainPlugin {
+	return &ChainPlugin{
+		chainID: helper.RLPHash("chainplugin"),
+	}
+}
+
+//Init method
+func (cp *ChainPlugin) Init() error {
 	//catch exception, do nothing if catch exception
-	helper.CatchException(func() {
-		return
-	})
 
 	//unmarshal yaml file
-	err, data := helper.GetFileHelper("chain_config.yaml")
+	err, data := helper.GetFileHelper("chain_config.yaml", application.App().GetConfigFolder())
 	if err != nil {
-		log.Printf("chain_plugin init error={%v}", err)
-		return
+		log.Printf("chain_plugin init chain config error={%v}", err)
+		return err
 	}
 
-	var config Chain_Config
+	var config controller.CtlConfig
 	if err := yaml.Unmarshal(data, &config); err != nil {
-		log.Printf("chain_plugin init unmarshal config  error={%v}", err)
-		return
+		log.Printf("chain_plugin init chain config unmarshal config  error={%v}", err)
+		return err
 	}
 
 	log.Printf("chain_plugin init config={%v}", config)
-	self.Config = config
+	cp.Config = config
 
-	//new fork db
-	self.Fork_DB, err = NewForkDB(self.Config.Block_Log_Dir, self.Config.Cache, self.Config.Handles)
-	if err != nil {
-		log.Printf("chain_plugin init new fork db err={%v}", err)
+	cp.chain = controller.NewController(cp.Config)
+	return nil
+}
+
+//Open method
+func (cp *ChainPlugin) Open() (err error) {
+	defer func() {
+		if nerr := recover(); nerr != nil {
+			str := fmt.Sprintf("chain Plugin Open panic={%v}", nerr)
+			err = nerr.(error)
+			panic(str)
+		}
+	}()
+
+	if err := cp.chain.StartUp(); err != nil {
+		log.Printf("chain Plugin Open err={%v}", err)
+		return err
 	}
+
+	cp.chainID = cp.chain.Genesis.ComputeChainID()
+	log.Printf("BlockChain started;head block num is {%d}, genesis timestamp is {%v}", cp.chain.HeadBlockNum(), cp.chain.Genesis.InitTimeStamp)
+	return nil
 }
 
-func (self *chain_plugin) Open() {
+//Close method
+func (cp *ChainPlugin) Close() {
 
 }
 
-func (self *chain_plugin) Close() {
-
+//Chain get controller
+func (cp *ChainPlugin) Chain() *controller.Controller {
+	return cp.chain
 }
 
-func (self *chain_plugin) AcceptBlock(block *types.Block) {
-	msg := message.NewMsg(message.BlockMsg, block)
-
-	msg.Send(self.Block_Chan)
+//GetChainID get chain id
+func (cp *ChainPlugin) GetChainID() common.Hash {
+	return cp.chainID
 }
 
-func (self *chain_plugin) AccpetTranscation(packed_trx *types.Transcation) {
-	msg := message.NewMsg(message.TrxMsg, packed_trx)
-
-	msg.Send(self.Trx_Chan)
-}
-
-//singleton pattern of thread safety
-var oneinstance *chain_plugin
-var once sync.Once
-
-func GetInstance() *chain_plugin {
-	//exec only once
-	once.Do(func() {
-		oneinstance = &chain_plugin{}
-	})
-
-	return oneinstance
+//GetChainConfig return controller config
+func (cp *ChainPlugin) GetChainConfig() controller.CtlConfig {
+	return cp.chain.Config
 }

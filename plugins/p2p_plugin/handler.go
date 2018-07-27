@@ -407,12 +407,11 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 		}
 		break
 	case msg.Code == MsgTypeSignedBlock:
-
+		slog.Printf("received signed_block")
 		blkData := types.NewBlockStateEmpty()
 		msg.Decode(blkData)
 		blkId := blkData.ID
 		blkNum := blkData.BlockNum
-		slog.Printf("received signed_block,%d", blkNum)
 		if pm.syncMaster.chain.ForkDB.GetBlock(blkId) != nil {
 			pm.syncMaster.recvBlock(p, blkId, blkNum)
 			return nil

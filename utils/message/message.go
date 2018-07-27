@@ -8,14 +8,15 @@ import (
 
 //defines msg code
 const (
-	BlockMsg = 0x00
-	TrxMsg   = 0x01
+	BlockMsg uint16 = 1 << iota
+	BlockHeaderMsg
+	TrxMsg
 )
 
 //Msg defines the message structure of chain_plugin and p2p_plugin
 type Msg struct {
 	//msg code
-	Code uint64
+	Code uint16
 
 	Size uint32 //size of the payload
 
@@ -24,7 +25,7 @@ type Msg struct {
 }
 
 //New Msg with given MsgCode and Msg Data
-func NewMsg(code uint64, data interface{}) *Msg {
+func NewMsg(code uint16, data interface{}) *Msg {
 	size, r, err := rlp.EncodeToReader(data)
 	if err != nil {
 		return nil

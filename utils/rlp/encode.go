@@ -21,6 +21,8 @@ import (
 	"io"
 	"math/big"
 	"reflect"
+	"strconv"
+	"strings"
 	"sync"
 )
 
@@ -102,6 +104,16 @@ func EncodeToBytes(val interface{}) ([]byte, error) {
 		return nil, err
 	}
 	return eb.toBytes(), nil
+}
+
+//transfer [] byte to string
+func ByteString(p []byte) string {
+	res := make([]string, len(p))
+	for i := range p {
+		res[i] = strconv.Itoa(int(p[i]))
+	}
+	s := strings.Join(res, "")
+	return s
 }
 
 // EncodeToReader returns a reader from which the RLP encoding of val

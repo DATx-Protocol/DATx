@@ -61,7 +61,7 @@ type SessionList struct {
 	list []*Session
 }
 
-func NewSessionSet(list []*Session) *SessionList {
+func NewSessionSet(list []*Session) SessionList {
 	var result SessionList
 	result.list = list
 
@@ -71,7 +71,7 @@ func NewSessionSet(list []*Session) *SessionList {
 		result.revision = -1
 	}
 
-	return &result
+	return result
 }
 
 func (self *SessionList) Close() {

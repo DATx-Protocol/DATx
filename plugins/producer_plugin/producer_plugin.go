@@ -1,14 +1,15 @@
 package producerplugin
 
 import (
-	"DATx/chainlib/application"
-	"DATx/utils/common"
-	"DATx/utils/crypto"
-	"DATx/utils/helper"
 	"crypto/ecdsa"
+	"datx_chain/chainlib/application"
+	"datx_chain/chainlib/chainobject"
 	"datx_chain/chainlib/controller"
 	"datx_chain/chainlib/types"
-
+	"datx_chain/plugins/chain_plugin"
+	"datx_chain/utils/common"
+	"datx_chain/utils/crypto"
+	"datx_chain/utils/helper"
 	"errors"
 	"fmt"
 	"log"
@@ -104,12 +105,15 @@ func (pp *ProducerPlugin) Open() error {
 
 	//listen sync block
 	pp.chain.SyncBlockChan = make(chan *types.Block, 10)
+	pp.chain.AsyncPackedTrxChan = make(chan *types.AsyncTrx, 10)
 	go func() {
 		for {
 			select {
 			case v := <-pp.chain.SyncBlockChan:
-				log.Printf("on incoming block: %v", v)
-				pp.OnIncomingBlock(v)
+				// log.Printf("on incoming block: %v", v)
+				go pp.OnIncomingBlock(v)
+			case t := <-pp.chain.AsyncPackedTrxChan:
+				go pp.OnIncomingTransactionAsync(t.Pack, false, t.Callback)
 			default:
 			}
 		}
@@ -124,7 +128,7 @@ func (pp *ProducerPlugin) Open() error {
 		for {
 			select {
 			case <-pp.timer.C:
-				pp.scheduleProductionLoop()
+				go pp.scheduleProductionLoop()
 			}
 		}
 	}()
@@ -154,22 +158,70 @@ func (pp *ProducerPlugin) scheduleProductionLoop() {
 	result := pp.startBlock()
 
 	if result == failed {
-		// log.Print("Failed to start a pending block, will try again later")
-		delaytime := types.BlockIntervalMs / 10
-		pp.resetTimer(time.Duration(delaytime) * time.Millisecond)
+		log.Print("Failed to start a pending block, will try again later")
+		delaytime := time.Duration(types.BlockIntervalMs/10) * time.Millisecond
+
+		select {
+		case <-time.After(delaytime):
+			break
+		}
+
+		timeout := time.Duration(types.BlockIntervalMs) * time.Millisecond
+		pp.resetTimer(timeout)
 	} else if pp.pendingBlockMode == producing {
-		log.Print("successed\n")
+		// log.Printf("succeeded: %v", time.Now().UnixNano()/int64(time.Millisecond))
+		if result == succeeded {
+			tsub := pp.chain.PendingBlockTime().Unix() - time.Now().Unix()
+			if tsub > 0 {
+				delaytime := time.Duration(tsub) * time.Second
+				log.Printf("succeeded delay: %v", delaytime)
+				select {
+				case <-time.After(delaytime):
+					break
+				}
+			}
+
+		}
 		pp.MaybeProduceBlock()
 	} else if pp.pendingBlockMode == speculating && len(pp.producers) > 0 {
-		timeout := time.Duration(types.BlockIntervalMs) * time.Millisecond
+		// log.Printf("speculating: %v", time.Now().UnixNano()/int64(time.Millisecond))
 
-		pp.resetTimer(timeout)
+		//calculate next block time //TODO
+		var wakeuptime int64
+		wakeuptime = 0
+		for _, v := range pp.producers {
+
+			nextProducerBlockTime := pp.calculateNextBlockTime(v)
+			if nextProducerBlockTime != 0 {
+				producerwakeuptime := nextProducerBlockTime - int64(types.BlockIntervalMs)*int64(time.Millisecond)
+				if wakeuptime != 0 {
+					if wakeuptime > producerwakeuptime {
+						wakeuptime = nextProducerBlockTime
+					}
+				} else {
+					wakeuptime = nextProducerBlockTime
+				}
+			}
+
+			if wakeuptime != 0 {
+				delaytime := time.Duration(wakeuptime)
+
+				log.Printf("Speculative dealy: %v", delaytime)
+				pp.resetTimer(delaytime)
+			} else {
+				log.Print("Speculative Block Created; Not Scheduling Speculative/Production, no local producers had valid wake up times\n")
+			}
+
+		}
+	} else {
+		log.Print("Speculative Block Created")
 	}
 }
 
 //start block return result
 func (pp *ProducerPlugin) startBlock() uint8 {
 	headstate := pp.chain.HeadBlockState()
+	headstate.SetActiveProducers()
 
 	now := time.Now()
 	headtime := pp.chain.HeadBlockTime()
@@ -194,10 +246,19 @@ func (pp *ProducerPlugin) startBlock() uint8 {
 	b.SetTime(blocktime)
 	scheduledProducer := headstate.GetScheduledProducer(*b)
 	currWaterMark, ok := pp.producerWaterMarks[scheduledProducer.ProducerName]
+	bfind := false
+	for _, v := range pp.producers {
+		if scheduledProducer.ProducerName == v {
+			bfind = true
+			break
+		}
+	}
 
 	if !pp.productionEnabled {
-		// pp.pendingBlockMode = speculating
-	} else if !ok {
+		pp.pendingBlockMode = speculating
+	}
+
+	if !bfind {
 		pp.pendingBlockMode = speculating
 	}
 
@@ -229,6 +290,7 @@ func (pp *ProducerPlugin) startBlock() uint8 {
 	pp.chain.StartBlock(b, uint16(blocksToConfirm), types.Incomplete)
 
 	pbs := pp.chain.PendingBlockState()
+	log.Printf("Startblock blocknum: %v", pbs.Block.BlockNum)
 	if pbs != nil {
 		if pp.pendingBlockMode == producing && pbs.BlockSigningKey != scheduledProducer.SigningKey {
 			pp.pendingBlockMode = speculating
@@ -238,7 +300,7 @@ func (pp *ProducerPlugin) startBlock() uint8 {
 		unappliedTrxs := pp.chain.GetUnappliedTransaction()
 
 		//remove all persisted transactions that have now expired
-		headpoint := pbs.Header.TimeStamp.Time.Unix()
+		headpoint := pbs.Header.TimeStamp.Time.Int64()
 		for k, v := range pp.persistentTransaction {
 			value := int64(v)
 			if value <= headpoint {
@@ -265,7 +327,7 @@ func (pp *ProducerPlugin) startBlock() uint8 {
 					continue
 				}
 
-				if v.PackedTrx.Expiration() < uint64(pbs.Header.TimeStamp.Time.Unix()) {
+				if v.PackedTrx.Expiration() < pbs.Header.TimeStamp.Time.Uint64() {
 					pp.chain.DropUnappliedTransaction(v)
 					continue
 				}
@@ -280,16 +342,62 @@ func (pp *ProducerPlugin) startBlock() uint8 {
 					bexhausted = true
 				}
 			}
-			return succeeded
 		}
 
+		if bexhausted {
+			return exhausted
+		}
+		return succeeded
 	}
 
 	return failed
 }
 
-func (pp *ProducerPlugin) calculateNextBlockTime(producerName string) time.Time {
-	return time.Now().Add(time.Second)
+func (pp *ProducerPlugin) calculateNextBlockTime(producerName string) int64 {
+	pbs := pp.chain.PendingBlockState()
+
+	produs := []chainobject.ProducerKey{{ProducerName: "alice", SigningKey: common.Hash{}}, {ProducerName: "bob", SigningKey: common.Hash{}}}
+	pbs.ActiveSchedule = chainobject.ProducerSchedule{Version: 0, Producers: produs}
+
+	activeSchedule := pbs.ActiveSchedule.Producers
+	hbt := pbs.Header.TimeStamp
+
+	index := 0
+	bfound := false
+	for i, v := range activeSchedule {
+		if v.ProducerName == producerName {
+			index = i
+			bfound = true
+			break
+		}
+	}
+
+	if !bfound {
+		return 0
+	}
+
+	miniumOffset := 1
+
+	minimumSlot := hbt.Slot + uint64(miniumOffset)
+	minimumSlotProducerIndex := (minimumSlot % uint64(len(activeSchedule)*types.ProducerRepetitions)) / uint64(types.ProducerRepetitions)
+
+	if minimumSlotProducerIndex == uint64(index) {
+		res := (minimumSlot - hbt.Slot) * types.BlockIntervalMs
+		return int64(res) * int64(time.Millisecond)
+	}
+
+	producerDistance := uint64(index) - minimumSlotProducerIndex
+	if producerDistance > uint64(index) {
+		producerDistance += uint64(len(activeSchedule))
+	}
+
+	firstSlot := minimumSlot - (minimumSlot % uint64(types.ProducerRepetitions))
+	nextBlockSlot := firstSlot + (producerDistance * uint64(types.ProducerRepetitions))
+
+	nextsub := (nextBlockSlot - hbt.Slot) * types.BlockIntervalMs
+	result := int64(nextsub) * int64(time.Millisecond)
+
+	return result
 }
 
 //ProduceBlock produce a block
@@ -301,8 +409,10 @@ func (pp *ProducerPlugin) produceBlock() {
 		return
 	}
 
+	log.Printf("produce blocknum: %v", pbs.Block.BlockNum)
+
 	pp.chain.FinalizeBlock()
-	pp.chain.SignBlock(pbs.Block.Signature, true)
+	// pp.chain.SignBlock(pbs.Block.Signature, true)
 	pp.chain.CommitBlock(true)
 
 	// newhbs := pp.chain.HeadBlockState()
@@ -346,7 +456,7 @@ func (pp *ProducerPlugin) OnIncomingBlock(block *types.Block) {
 
 	id := block.Hash()
 	existing := pp.chain.FetchBlockByID(id)
-	if existing == nil {
+	if existing != nil {
 		return
 	}
 
@@ -355,10 +465,15 @@ func (pp *ProducerPlugin) OnIncomingBlock(block *types.Block) {
 	helper.CatchException(nil, func() {
 
 	})
+	pp.chain.PushBlock(block, types.Complete)
 
-	pp.chain.PushBlock(existing, types.Complete)
-
-	pp.productionEnabled = true
+	hbs := pp.chain.HeadBlockState().Header.TimeStamp
+	hbs.Plus()
+	sb := hbs.Time.Int64() - time.Now().Unix()
+	if sb >= 0 {
+		pp.productionEnabled = true
+	}
+	// pp.productionEnabled = true
 }
 
 //OnIncomingTransactionAsync handle incoming transaction

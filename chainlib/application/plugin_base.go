@@ -1,7 +1,8 @@
 package application
 
+//Pluginer plugin interface
 type Pluginer interface {
-	Init()
-	Open()
+	Init() error
+	Open() error
 	Close()
 }

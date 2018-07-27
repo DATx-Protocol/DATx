@@ -7,10 +7,14 @@ import (
 	"datx_chain/plugins/chain_plugin"
 	"datx_chain/plugins/producer_plugin"
 	"datx_chain/utils/common"
-	"datx_chain/utils/rlp"
 	"encoding/json"
+
+	"io/ioutil"
 	"log"
+	"net/http"
 	"time"
+
+	simplejson "github.com/bitly/go-simplejson"
 )
 
 //CreateTransfer create a action transfer
@@ -110,10 +114,9 @@ func PushTransaction(pack *types.PackedTransaction, next func(inerr error, trace
 }
 
 //FindTransaction all transaction from forkdb
-func FindTransaction() *controller.TransactionDetails {
-	var result *controller.TransactionDetail
-	var tdList *controller.TransactionDetails
-
+func FindTransaction() ([]*TransactionDetail, error) {
+	result := &TransactionDetail{}
+	tdList := make([]*TransactionDetail, 0)
 	//init chain
 	plugin, err := application.App().Find("chain")
 	if err != nil {
@@ -121,41 +124,46 @@ func FindTransaction() *controller.TransactionDetails {
 	}
 
 	chainplugin := plugin.(*chainplugin.ChainPlugin)
-	fdb := chainplugin.Chain().ForkDB
-	head := fdb.Head().Block.BlockHeader
-	trxList := fdb.Head().Trxs
-	result.BlockHeight = int64(head.BlockNum)
-	result.TimeStamp = head.TimeStamp.Time.String()
+	index := chainplugin.Chain().ForkDB.GetIndex()
+	result.BlockHeight = 0
+
 	result.Pending = "True"
 	result.TrxType = "Transfer"
 	result.Amount = 0
 
 	transfer := &controller.Transfer{}
-	for _, v := range trxList {
-		hash, err := rlp.EncodeToBytes(v.ID)
-		if err != nil {
-			log.Printf("get rlp err={%v}", err)
+	//result.BlockHeight = int64(head.BlockHeaderState.BlockNum)
+	for _, val := range index {
+		blockheight := int64(val.BlockHeaderState.BlockNum)
+		if result.BlockHeight < blockheight {
+			result.BlockHeight = blockheight
 		}
-		result.TrxHash = rlp.ByteString(hash)
+		result.TimeStamp = val.BlockHeaderState.Header.TimeStamp.String()
+		for _, v := range val.Trxs {
+			for _, action := range v.Trx.Transaction.Actions {
+				data := action.Data
+				if err := json.Unmarshal(data, &transfer); err == nil {
+					result.Amount += float64(transfer.Amount)
+					result.TrxHash = v.ID.String()
+					tdList = append(tdList, result)
+					log.Printf("*TransactionMetaData:%v,blockheight is :%v", result.TrxHash, result.BlockHeight)
+				} else {
+					return nil, err
+				}
 
-		for _, action := range v.Trx.Actions {
-			data := action.Data
-			if err := json.Unmarshal(data, &transfer); err == nil {
-				result.Amount += float64(transfer.Amount)
-			} else {
-				log.Printf("Unmarshal json err : %v", err)
 			}
+
 		}
-		tdList.TrxDetailList = append(tdList.TrxDetailList, result)
+
 	}
-	log.Printf("Transactionlist is  %v", tdList)
-	return tdList
+
+	return tdList, nil
 
 }
 
 //QueryTransactionById query transactiondetail by trx hash
-func QueryTransactionById(id common.Hash) *controller.TransactionDetail {
-	var result *controller.TransactionDetail
+func QueryTransactionById(id common.Hash) *TransactionDetail {
+	var result *TransactionDetail
 
 	//init chain
 	plugin, err := application.App().Find("chain")
@@ -186,19 +194,19 @@ func QueryTransactionById(id common.Hash) *controller.TransactionDetail {
 	return result
 }
 
-//BlockByIDResult 返回的json格式
+//BlockByIDResult return json of Block
 type BlockByIDResult struct {
-	BlockHeight int64   //区块高度
-	BlockID     string  //区块ID，从common.Hash转成string格式
-	TranxCnt    int64   //交易量
-	Amount      float64 //总金额
-	Rewards     float64 //奖励数量
-	Producer    string  //打块节点账户名
-	TimeStamp   string  //时间戳，从BlockTime转成时间格式
-	Pending     string  //Pending，统一填True
+	BlockHeight int64
+	BlockID     string
+	TranxCnt    int64
+	Amount      float64
+	Rewards     float64
+	Producer    string
+	TimeStamp   string
+	Pending     string
 }
 
-//QueryBlockByID 按BlockID查询
+//QueryBlockByID query by BlockID
 func QueryBlockByID(id common.Hash) *BlockByIDResult {
 
 	//init chain
@@ -215,9 +223,10 @@ func QueryBlockByID(id common.Hash) *BlockByIDResult {
 	res.BlockHeight = int64(blockstate.BlockHeaderState.BlockNum)
 	res.BlockID = blockstate.BlockHeaderState.ID.String()
 	res.Producer = blockstate.BlockHeaderState.Header.Producer
-	res.TimeStamp = blockstate.BlockHeaderState.Header.TimeStamp.Time.String()
+	ts := blockstate.BlockHeaderState.Header.TimeStamp.Time.Int64()
+	res.TimeStamp = time.Unix(ts, 0).String()
 	res.Pending = "True"
-	res.TranxCnt = 0
+	res.TranxCnt = int64(len(blockstate.Trxs))
 	res.Amount = 0
 	res.Rewards = 50
 
@@ -226,17 +235,16 @@ func QueryBlockByID(id common.Hash) *BlockByIDResult {
 	for _, t := range blockstate.Trxs {
 		for _, a := range t.Trx.Transaction.Actions {
 			if err := json.Unmarshal(a.Data, &transfer); err == nil {
-				res.TranxCnt++
 				res.Amount += float64(transfer.Amount)
 			} else {
-				log.Printf("Unmarshal json err : %v", err)
+				return nil
 			}
 		}
 	}
 	return res
 }
 
-//QueryBlocks 区块列表
+//QueryBlocks return json of BlockList
 func QueryBlocks() []*BlockByIDResult {
 
 	//init chain
@@ -249,25 +257,30 @@ func QueryBlocks() []*BlockByIDResult {
 
 	var index = chain.ForkDB.GetIndex()
 
+	blockcnt := 0
 	res := make([]*BlockByIDResult, 0)
 	for key := range index {
 		res = append(res, QueryBlockByID(key))
+		blockcnt++
+		if blockcnt >= 20 {
+			return res
+		}
 	}
 
 	return res
 }
 
-//GeneralInfo 返回的json格式
+//GeneralInfo return json of GeneralInfo
 type GeneralInfo struct {
-	Price       float64 //DATx 价格。https://api.coinmarketcap.com/v2/ticker/2567/
-	BlockHeight int64   //区块高度
-	LibNum      int64   //LIB NUM
-	TranxCnt    int64   //交易总量。实时统计
-	AccountCnt  int64   //账号数。实时统计
-	AgentCnt    int64   //受托人总数
+	Price       float64 //https://api.coinmarketcap.com/v2/ticker/2567/
+	BlockHeight int64
+	LibNum      int64
+	TranxCnt    int64
+	AccountCnt  int64
+	AgentCnt    int64
 }
 
-//QueryGeneralInfo 查询总体信息
+//QueryGeneralInfo GeneralInfo
 func QueryGeneralInfo() *GeneralInfo {
 
 	//init chain
@@ -288,25 +301,39 @@ func QueryGeneralInfo() *GeneralInfo {
 	res.AccountCnt = 45
 	res.AgentCnt = 2
 
-	transfer := controller.Transfer{}
+	httpClient := &http.Client{}
+	request, err := http.NewRequest("GET", "https://api.coinmarketcap.com/v2/ticker/2567/", nil)
+	if err != nil {
+		res.Price = 0
+	}
+	response, err := httpClient.Do(request)
+	if err != nil {
+		res.Price = 0
+	}
+	defer response.Body.Close()
+	body, err := ioutil.ReadAll(response.Body)
+	if err != nil {
+		res.Price = 0
+	}
+	//fmt.Println(string(body))
+	js, err := simplejson.NewJson(body)
+	if err != nil {
+		res.Price = 0
+	} else {
+		res.Price = js.Get("data").Get("quotes").Get("USD").Get("price").MustFloat64()
+	}
 
 	for _, val := range index {
 		blockheight := int64(val.BlockHeaderState.BlockNum)
 		if res.BlockHeight < blockheight {
 			res.BlockHeight = blockheight
 		}
-		for _, t := range val.Trxs {
-			for _, a := range t.Trx.Transaction.Actions {
-				if err := json.Unmarshal(a.Data, &transfer); err == nil {
-					res.TranxCnt++
-				} else {
-					log.Printf("Unmarshal json err : %v", err)
-				}
-			}
-		}
+		res.TranxCnt += int64(len(val.Trxs))
 	}
 
-	res.LibNum = res.BlockHeight - 50
+	if res.BlockHeight > 50 {
+		res.LibNum = res.BlockHeight - 50
+	}
 
 	return res
 }

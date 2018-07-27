@@ -1,8 +1,14 @@
 #block log dir config
 block_log_dir : block_log
 
+#chain base dir config
+chain_dir : chain_log
+
 #mode
 read_only : false
+
+#force_all_checks
+force_all_checks : false
 
 #db handle open file cache capacity
 handles : 0

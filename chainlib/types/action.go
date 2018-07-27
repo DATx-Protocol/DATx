@@ -1,5 +1,12 @@
 package types
 
+//PermissionLevel struct
+type PermissionLevel struct {
+	Actor      string
+	Permission string
+}
+
+//Action struct
 type Action struct {
 	//account name
 	Account string
@@ -8,12 +15,13 @@ type Action struct {
 	ActionName string
 
 	//Authorization
+	Authorization []PermissionLevel
 
 	//action dat
 	Data []byte
 }
 
-//Action constructor
+//NewAction Action constructor
 func NewAction(account, name string, data []byte) *Action {
 	return &Action{
 		Account:    account,

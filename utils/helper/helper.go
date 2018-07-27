@@ -10,7 +10,6 @@ import (
 	"io/ioutil"
 	"log"
 	"os"
-	"os/exec"
 	"path"
 	"path/filepath"
 	"runtime/debug"
@@ -18,28 +17,34 @@ import (
 )
 
 func GetCurrentPath() string {
-	file, _ := exec.LookPath(os.Args[0])
-	path, _ := filepath.Abs(file)
+	file, _ := os.Getwd()
 
+	path, _ := filepath.Abs(file)
+	// path := filepath.Dir(file)
+	log.Printf("get current path:%v", path)
 	if len(path) == 0 {
 		return path
 	}
 
 	ins := strings.Split(path, string(os.PathSeparator))
-	return strings.Join(ins[:len(ins)-2], string(os.PathSeparator))
+	return strings.Join(ins[:], string(os.PathSeparator))
 }
 
 func MakePath(path ...string) string {
-	first := GetCurrentPath()
-	for _, v := range path {
-		first = first + string(os.PathSeparator) + v
+	var first string
+	if len(path) < 1 {
+		return first
+	}
+	first = path[0]
+	for i := 1; i < len(path); i++ {
+		first = first + string(os.PathSeparator) + path[i]
 	}
 
 	return first
 }
 
 //open file and return file data, support arbitrary type of file on config dir
-func GetFileHelper(config string) (error, []byte) {
+func GetFileHelper(config string, configFolder string) (error, []byte) {
 	//catch execption
 	defer func() {
 		if err := recover(); err != nil {
@@ -48,17 +53,23 @@ func GetFileHelper(config string) (error, []byte) {
 		}
 	}()
 
-	//get exec file current path
-	CurrentPath := GetCurrentPath()
-	if len(CurrentPath) == 0 {
-		return errors.New(fmt.Sprintf("Parse config={%s} error", config)), nil
-	}
 	//check suffix name of config file
 	if suffix := path.Ext(config); strings.Compare(suffix, ".yaml") != 0 {
 		return errors.New(fmt.Sprintf("config={%s} suffix is not yaml", config)), nil
 	}
 
-	configpath := MakePath("config", config)
+	//get exec file current path
+	CurrentPath := GetCurrentPath()
+	if len(CurrentPath) == 0 {
+		return errors.New(fmt.Sprintf("Parse config={%s} error", config)), nil
+	}
+	log.Printf("current path:%v", CurrentPath)
+	in := strings.Index(CurrentPath, "datx_chain")
+	if in < 1 {
+		return errors.New(fmt.Sprintf("Parse config={%s} index error, not include datx_chain.", config)), nil
+	}
+
+	configpath := MakePath(CurrentPath[:in-1], "datx_chain", configFolder, config)
 	log.Printf("Config={%s} path={%s}", config, configpath)
 
 	//check file exist or not
@@ -77,12 +88,12 @@ func GetFileHelper(config string) (error, []byte) {
 }
 
 //catch exception, call errhandle func to release resource if there are exist panic
-func CatchException(errhandle func()) (err error) {
+func CatchException(err error, errhandle func()) {
 	defer func() {
-		if err := recover(); err != nil {
-			log.Printf("\n***********catch exception: \n%v\n\n", err)
+		if cerr := recover(); cerr != nil {
+			log.Printf("\n***********catch exception: \n%v\n\n", cerr)
 
-			str, ok := err.(string)
+			str, ok := cerr.(string)
 			if ok {
 				err = errors.New(str)
 			} else {
@@ -96,8 +107,6 @@ func CatchException(errhandle func()) (err error) {
 			debug.PrintStack()
 		}
 	}()
-
-	return nil
 }
 
 func RLPHash(x interface{}) (h common.Hash) {
@@ -112,4 +121,15 @@ func ToBytes(v uint64) []byte {
 	binary.BigEndian.PutUint64(b, uint64(v))
 
 	return b
+}
+
+func EncodeBit(k1, k2 uint32) uint64 {
+	pair := uint64(k1)<<32 | uint64(k2)
+	return pair
+}
+
+func DecodeBit(pair uint64) (uint32, uint32) {
+	k1 := uint32(pair >> 32)
+	k2 := uint32(pair) & 0xFFFFFFFF
+	return k1, k2
 }

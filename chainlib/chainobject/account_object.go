@@ -2,13 +2,12 @@ package chainobject
 
 import (
 	"datx_chain/utils/common"
-	"datx_chain/utils/helper"
 	"time"
 )
 
 type AccountObject struct {
 	//the global id of account object
-	Id uint64
+	ID uint64
 
 	//account name
 	Name string
@@ -40,16 +39,12 @@ type AccountObject struct {
 
 func NewAccount(name string) *AccountObject {
 	return &AccountObject{
-		Id:         helper.GetOID(),
+		ID:         GetOID(AccountType),
 		Name:       name,
 		Vm_type:    0,
 		Vm_version: 0,
 		Privileged: false,
 	}
-}
-
-func (self *AccountObject) ID() uint64 {
-	return self.Id
 }
 
 func (self *AccountObject) SetCode(code []byte) {

@@ -11,12 +11,6 @@ import (
 	"log"
 )
 
-const (
-	account_type uint32 = 1 << iota
-	transcation_type
-	max_type
-)
-
 type Generic_Index struct {
 	//dequene of undo_state
 	stack *list.List
@@ -25,7 +19,7 @@ type Generic_Index struct {
 	revision int64
 
 	//
-	next_id uint64
+	nextid uint64
 
 	//value type
 	value_type uint32
@@ -38,36 +32,14 @@ func NewGenericIndex(valuetype uint32, db *datxdb.LDBDatabase) *Generic_Index {
 	return &Generic_Index{
 		stack:      list.New(),
 		revision:   0,
-		next_id:    0,
+		nextid:     0,
 		value_type: valuetype,
 		db:         db,
 	}
 }
 
-//get global id of this raw object
-func (self *Generic_Index) getid(v interface{}) uint64 {
-	var id uint64
-
-	//return 0 if the input v is invalid
-	defer func() {
-		if err := recover(); err != nil {
-			id = 0
-		}
-	}()
-
-	switch {
-	case self.value_type == account_type:
-		id = v.(*chainobject.AccountObject).ID()
-	default:
-		log.Printf("getid on undefined value type={%v}", self.value_type)
-		id = 0
-	}
-
-	return id
-}
-
 //get rlp data of this raw object
-func (self *Generic_Index) getrlp(v interface{}) ([]byte, error) {
+func (index *Generic_Index) getrlp(v interface{}) ([]byte, error) {
 	data, err := rlp.EncodeToBytes(v)
 	if err != nil {
 		log.Printf("get rlp err={%v}", err)
@@ -76,81 +48,62 @@ func (self *Generic_Index) getrlp(v interface{}) ([]byte, error) {
 	return data, nil
 }
 
-//get hash id of rlp object
-func (self *Generic_Index) fromrlp(v []byte) uint64 {
-	var id uint64
-
-	switch {
-	case self.value_type == account_type:
-		var value *chainobject.AccountObject
-		if err := rlp.DecodeBytes(v, &value); err != nil {
-			log.Printf("decode rlp err={%v}", err)
-			return 0
-		}
-		id = value.ID()
-	default:
-		log.Printf("getid on undefined value type={%v}", self.value_type)
-	}
-
-	return id
+func (index *Generic_Index) IsValidate(objtype uint32) bool {
+	return index.value_type == objtype
 }
 
-func (self *Generic_Index) IsValidate(objtype uint32) bool {
-	return self.value_type == objtype
+func (index *Generic_Index) Enabled() bool {
+	return index.stack.Len() > 0
 }
 
-func (self *Generic_Index) Enabled() bool {
-	return self.stack.Len() > 0
-}
-
-func (self *Generic_Index) Start_Undo_Session(enabled bool) *Session {
+func (index *Generic_Index) Start_Undo_Session(enabled bool) *Session {
 	if enabled {
-		new_revision := self.revision + 1
-		self.revision = new_revision
+		new_revision := index.revision + 1
+		index.revision = new_revision
 
-		state := NewUndoState(self.next_id, new_revision)
-		self.stack.PushBack(state)
+		state := NewUndoState(index.nextid, new_revision)
+		index.stack.PushBack(state)
 
-		return NewSession(self, self.revision)
+		return NewSession(index, index.revision)
 	}
 
-	return NewSession(self, -1)
+	return NewSession(index, -1)
 }
 
-func (self *Generic_Index) Undo() error {
-	if !self.Enabled() {
+func (index *Generic_Index) Undo() error {
+	if !index.Enabled() {
 		return errors.New("undo stack is empty")
 	}
 
-	temp := self.stack.Back()
+	temp := index.stack.Back()
 	head := temp.Value.(*undo_state)
 
 	//recover the old values
 	for k, v := range head.old_values {
-		if err := self.db.Put(helper.ToBytes(k), v); err != nil {
+		if err := index.db.Put(helper.ToBytes(k), v); err != nil {
 			return err
 		}
 	}
 
 	//recover the new values
 	for k, _ := range head.new_values {
-		if err := self.db.Delete(helper.ToBytes(k)); err != nil {
+		if err := index.db.Delete(helper.ToBytes(k)); err != nil {
 			return err
 		}
 	}
 
-	self.next_id = head.old_next_id
+	index.nextid = head.old_next_id
 
 	//recover the removed values
 	for k, v := range head.removed_values {
-		if err := self.db.Put(helper.ToBytes(k), v); err != nil {
+		if err := index.db.Put(helper.ToBytes(k), v); err != nil {
 			return err
 		}
 	}
 
-	self.stack.Remove(temp)
-	new := self.revision - 1
-	self.revision = new
+	index.stack.Remove(temp)
+	new := index.revision - 1
+	index.revision = new
 	return nil
 }
 
@@ -193,22 +146,22 @@ func (self *Generic_Index) Undo() error {
 // Type N/A can be ignored or assert(false) as it can only occur if prev_state and state have illegal values
 // (a serious logic error which should never happen).
 //
-func (self *Generic_Index) Squash() error {
-	if !self.Enabled() {
+func (index *Generic_Index) Squash() error {
+	if !index.Enabled() {
 		return errors.New("squash stack is empty")
 	}
 
 	//get head and prev element
-	head := self.stack.Back()
-	self.stack.Remove(head)
-	prev := self.stack.Back()
+	head := index.stack.Back()
+	index.stack.Remove(head)
+	prev := index.stack.Back()
 
 	state := head.Value.(*undo_state)
 	prev_state := prev.Value.(*undo_state)
 
 	// We can only be outside type A/AB (the nop path) if B is not nop, so it suffices to iterate through B's three containers.
 	for _, v := range state.old_values {
-		id := self.fromrlp(v)
+		id := chainobject.GetIDFromRLPData(index.value_type, v)
 
 		// new+upd -> new, type A
 		if _, ok := prev_state.new_values[id]; ok {
@@ -235,7 +188,7 @@ func (self *Generic_Index) Squash() error {
 
 	// *+del
 	for k, v := range state.removed_values {
-		id := self.fromrlp(v)
+		id := chainobject.GetIDFromRLPData(index.value_type, v)
 
 		// new + del -> nop (type C)
 		if _, ok := prev_state.new_values[id]; ok {
@@ -260,28 +213,28 @@ func (self *Generic_Index) Squash() error {
 		prev_state.removed_values[k] = v
 	}
 
-	new := self.revision - 1
-	self.revision = new
+	new := index.revision - 1
+	index.revision = new
 	return nil
 }
 
-func (self *Generic_Index) Commit(revision int64) {
-	if !self.Enabled() {
+func (index *Generic_Index) Commit(revision int64) {
+	if !index.Enabled() {
 		return
 	}
 
-	firele := self.stack.Front()
+	firele := index.stack.Front()
 	first := firele.Value.(*undo_state)
-	for self.Enabled() && first.revision <= revision {
-		self.stack.Remove(firele)
-		firele = self.stack.Front()
+	for index.Enabled() && first.revision <= revision {
+		index.stack.Remove(firele)
+		firele = index.stack.Front()
 		first = firele.Value.(*undo_state)
 	}
 }
 
-func (self *Generic_Index) UndoAll() error {
-	for self.Enabled() {
-		err := self.Undo()
+func (index *Generic_Index) UndoAll() error {
+	for index.Enabled() {
+		err := index.Undo()
 		if err != nil {
 			return err
 		}
@@ -290,20 +243,24 @@ func (self *Generic_Index) UndoAll() error {
 	return nil
 }
 
-func (self *Generic_Index) SetRevision(revision int64) {
-	if !self.Enabled() {
-		self.revision = revision
+func (index *Generic_Index) SetRevision(revision int64) {
+	if !index.Enabled() {
+		index.revision = revision
 	}
+}
+
+func (index *Generic_Index) GetRevision() int64 {
+	return index.revision
 }
 
 // the purpose of on_modify/create/remove is to save undo state for the method of Undo()
 //update old values of undo_state
-func (self *Generic_Index) on_modify(key uint64, value []byte) error {
-	if !self.Enabled() {
+func (index *Generic_Index) on_modify(key uint64, value []byte) error {
+	if !index.Enabled() {
 		return errors.New("on_modify stack is empty.")
 	}
 
-	head := self.stack.Back().Value.(*undo_state)
+	head := index.stack.Back().Value.(*undo_state)
 
 	//if found on new valus,do nothing
 	if _, ok := head.new_values[key]; ok {
@@ -320,12 +277,12 @@ func (self *Generic_Index) on_modify(key uint64, value []byte) error {
 	return nil
 }
 
-func (self *Generic_Index) on_remove(key uint64, value []byte) error {
-	if !self.Enabled() {
+func (index *Generic_Index) on_remove(key uint64, value []byte) error {
+	if !index.Enabled() {
 		return errors.New("on_remove stack is empty.")
 	}
 
-	head := self.stack.Back().Value.(*undo_state)
+	head := index.stack.Back().Value.(*undo_state)
 
 	//if found, remove from the new values
 	if _, ok := head.new_values[key]; ok {
@@ -349,116 +306,101 @@ func (self *Generic_Index) on_remove(key uint64, value []byte) error {
 	return nil
 }
 
-func (self *Generic_Index) on_create(key uint64, value []byte) error {
-	if !self.Enabled() {
+func (index *Generic_Index) on_create(key uint64, value []byte) error {
+	if !index.Enabled() {
 		return errors.New("on_create stack is empty.")
 	}
 
-	head := self.stack.Back().Value.(*undo_state)
+	head := index.stack.Back().Value.(*undo_state)
 
 	head.new_values[key] = value
 	return nil
 }
 
-//support Insert,Remove,Find operation for the objects
-func (self *Generic_Index) Insert(v interface{}) error {
-	self.next_id = self.next_id + 1
+//Insert support Insert,Remove,Find operation for the objects
+func (index *Generic_Index) Insert(v interface{}) error {
+	index.nextid = index.nextid + 1
 
 	//get global id of input object
-	id := self.getid(v)
-	if id == 0 {
-		str := fmt.Sprintf("Insert on unreg obj value={%v}", v)
-		return errors.New(str)
-	}
+	id := chainobject.GetIDFromRaw(index.value_type, v)
 
 	//get rlp data
-	data, err := self.getrlp(v)
+	data, err := index.getrlp(v)
 	if err != nil {
 		str := fmt.Sprintf("Insert obj={%v} err={%v}", v, err)
 		return errors.New(str)
 	}
 
 	//insert value into levelDB
-	if err := self.db.Put(helper.ToBytes(id), data); err != nil {
+	if err := index.db.Put(helper.ToBytes(id), data); err != nil {
 		str := fmt.Sprintf("Insert obj id={%v} err={%v}", id, err)
 		return errors.New(str)
 	}
 
-	return self.on_create(id, data)
+	return index.on_create(id, data)
 }
 
-func (self *Generic_Index) Modify(v interface{}) error {
+func (index *Generic_Index) Modify(v interface{}) error {
 	//get global id of input object
-	id := self.getid(v)
+	id := chainobject.GetIDFromRaw(index.value_type, v)
 	if id == 0 {
 		str := fmt.Sprintf("Modify on unreg obj value={%v}", v)
 		return errors.New(str)
 	}
 
 	//get rlp data
-	data, err := self.getrlp(v)
+	data, err := index.getrlp(v)
 	if err != nil {
 		str := fmt.Sprintf("Modify obj={%v} err={%v}", v, err)
 		return errors.New(str)
 	}
 
 	//get old value
-	old, err := self.db.Get(helper.ToBytes(id))
+	old, err := index.db.Get(helper.ToBytes(id))
 	if err != nil {
 		str := fmt.Sprintf("Modify get old obj id={%v} err={%v}", id, err)
 		return errors.New(str)
 	}
 
 	//insert new value into levelDB
-	if err := self.db.Put(helper.ToBytes(id), data); err != nil {
+	if err := index.db.Put(helper.ToBytes(id), data); err != nil {
 		str := fmt.Sprintf("Modify obj id={%v} err={%v}", id, err)
 		return errors.New(str)
 	}
 
-	return self.on_modify(id, old)
+	return index.on_modify(id, old)
 }
 
-func (self *Generic_Index) Remove(v interface{}) error {
+func (index *Generic_Index) Remove(v interface{}) error {
 	//get global id of input object
-	id := self.getid(v)
+	id := chainobject.GetIDFromRaw(index.value_type, v)
 	if id == 0 {
 		str := fmt.Sprintf("Remove on unreg obj value={%v}", v)
 		return errors.New(str)
 	}
 
 	//get old value
-	old, err := self.db.Get(helper.ToBytes(id))
+	old, err := index.db.Get(helper.ToBytes(id))
 	if err != nil {
 		str := fmt.Sprintf("Remove get old obj id={%v} err={%v}", id, err)
 		return errors.New(str)
 	}
 
 	//delete value from levelDB
-	if err := self.db.Delete(helper.ToBytes(id)); err != nil {
+	if err := index.db.Delete(helper.ToBytes(id)); err != nil {
 		str := fmt.Sprintf("chain base remove id={%v} err={%v}", id, err)
 		log.Printf(str)
 		return errors.New(str)
 	}
 
-	return self.on_remove(id, old)
+	return index.on_remove(id, old)
 }
 
-func (self *Generic_Index) Find(key uint64) (interface{}, error) {
-	data, err := self.db.Get(helper.ToBytes(key))
+func (index *Generic_Index) Find(key uint64) (interface{}, error) {
+	data, err := index.db.Get(helper.ToBytes(key))
 	if err != nil {
 		return nil, err
 	}
 
-	switch {
-	case self.value_type == account_type:
-		var value *chainobject.AccountObject
-		if err := rlp.DecodeBytes(data, &value); err != nil {
-			return nil, err
-		}
-		return value, nil
-	default:
-		str := fmt.Sprintf("Find on unreg value type={%v}", self.value_type)
-		log.Printf(str)
-		return nil, errors.New(str)
-	}
+	return chainobject.GetValue(index.value_type, data)
 }

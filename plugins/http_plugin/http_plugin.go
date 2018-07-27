@@ -126,7 +126,7 @@ func (p *HTTPPlugin) AddHandler(url string, handler HTTPHandler, methods ...stri
 
 //RegisterHandler register all handler
 func (p *HTTPPlugin) RegisterHandler() {
-	p.AddHandler("/transfer", TransferHandle, "GET", "POST")
+	p.AddHandler("/transfer", TransferHandler, "GET", "POST")
 	p.AddHandler("/transaction_list", GetTransactionListHandle, "GET", "POST")
 	p.AddHandler("/transaction_query_hash", GetTransactionByHashHandle, "GET", "POST")
 	p.AddHandler("/blocks_list", GetBlockListHandle, "GET", "POST")
