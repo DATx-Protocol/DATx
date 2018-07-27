@@ -8,6 +8,7 @@ import (
 
 	"datx_chain/chainlib/types"
 	"datx_chain/plugins/p2p_plugin/p2p"
+	"datx_chain/utils/common"
 )
 
 var (
@@ -17,20 +18,37 @@ var (
 )
 
 type TransactionState struct {
-	id         types.TransactionId
-	expireTime time.Time
-	blockNum   uint32
+	Id         common.Hash
+	ExpireTime time.Time
+	BlockNum   uint32
 }
 
 type SyncBlockState struct {
-	startBlockNum    uint32
-	endBlockNum      uint32
-	lastSyncBlockNum uint32
-	startSyncTime    time.Time
-	syncing          bool
-	connecting       bool
-	forkHead         types.BlockIdType
-	forkHeadNum      uint32
+	StartBlockNum    uint32
+	EndBlockNum      uint32
+	LastSyncBlockNum uint32
+	StartSyncTime    time.Time
+	Syncing          bool
+	Connecting       bool
+	ForkHead         types.BlockState
+	ForkHeadNum      uint32
+}
+
+type peerBlockState struct {
+	Id            common.Hash
+	BlkNum        uint32
+	IsKnown       bool
+	IsNoticed     bool
+	RequestedTime time.Time
+}
+
+type transactionState struct {
+	Id              common.Hash
+	IsKnownByPeer   bool   ///< true if we sent or received this trx to this peer or received notice from peer
+	IsNoticedToPeer bool   ///< have we sent peer notice we know it (true if we receive from this peer)
+	BlkNum          uint32 ///< the block number the transaction was included in
+	Expries         uint32
+	RequestedTime   time.Time
 }
 
 type peer struct {
@@ -42,6 +60,28 @@ type peer struct {
 
 	version int    // Protocol version negotiated
 	network uint64 // Network ID being on
+
+	lastHandshakeRecv  HandShakeMsg
+	lastHandshakeSent  HandShakeMsg
+	sentHandshakeCount uint32
+
+	syncing       bool
+	peerRequested syncState
+
+	forkHead    common.Hash
+	forkHeadNum uint32
+
+	blkState map[common.Hash]peerBlockState
+	trxState map[common.Hash]transactionState
+
+	lastReq RequestMsg
+}
+
+type syncState struct {
+	startBlock uint32
+	endBlock   uint32
+	last       uint32
+	timePoint  time.Time
 }
 
 func newPeer(version int, network uint64, p *p2p.Peer, rw p2p.MsgReadWriter) *peer {
@@ -49,11 +89,15 @@ func newPeer(version int, network uint64, p *p2p.Peer, rw p2p.MsgReadWriter) *pe
 	pubKey, _ := id.Pubkey()
 
 	return &peer{
+		id:      p.ID().String(),
 		Peer:    p,
 		pubKey:  pubKey,
 		rw:      rw,
 		version: version,
 		network: network,
+
+		blkState: make(map[common.Hash]peerBlockState, 0),
+		trxState: make(map[common.Hash]transactionState, 0),
 	}
 }
 
@@ -141,4 +185,10 @@ func (ps *peerSet) Close() {
 		p.Disconnect(p2p.DiscQuitting)
 	}
 	ps.closed = true
+}
+
+func (p *peer) Reset() {
+	p.peerRequested = syncState{}
+	p.blkState = make(map[common.Hash]peerBlockState, 0)
+	p.trxState = make(map[common.Hash]transactionState, 0)
 }

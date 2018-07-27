@@ -52,9 +52,10 @@ const (
 	MsgTypeSyncRequestMsg    = 0x05
 	MsgTypeSignedBlock       = 0x06
 	MsgTypePackedTransaction = 0x07
+	MsgTypeGoAwayMsg         = 0x08
 )
 
-type errCode int
+type errCode uint
 
 const (
 	ErrNoReason = iota
@@ -69,6 +70,12 @@ const (
 	ErrBeningOther
 	ErrOtherFatal
 	ErrAuthentication
+)
+
+const (
+	SyncStageLibCatchup = iota
+	SyncStageHeadCatchup
+	SyncStageInSync
 )
 
 func (e errCode) String() string {
@@ -92,68 +99,73 @@ var errorToString = map[int]string{
 }
 
 type ChainSizeMsg struct {
-	lastIrreversibleBlockNum uint32
-	lastIrreversibleBlockId  common.Hash
-	headNum                  uint32
-	headId                   common.Hash
+	LastIrreversibleBlockNum uint32
+	LastIrreversibleBlockId  common.Hash
+	HeadNum                  uint32
+	HeadId                   common.Hash
 }
 
 type HandShakeMsg struct {
-	networkVersion           uint16
-	networkId                uint32
-	timeStamp                time.Time
-	token                    common.Hash
-	sigature                 common.Hash
-	lastIrreversibleBlockNum uint32
-	lastIrreversibleBlockId  common.Hash
-	headNum                  uint32
-	headId                   common.Hash
-	os                       string
-	agent                    string
-	generation               int16
+	NetworkVersion           uint16
+	NetworkId                uint32
+	TimeStamp                time.Time
+	Token                    common.Hash
+	Sigature                 common.Hash
+	LastIrreversibleBlockNum uint32
+	LastIrreversibleBlockId  common.Hash
+	HeadNum                  uint32
+	HeadId                   common.Hash
+	OS                       string
+	Agent                    string
+	Generation               uint16
+	PeerID                   string
 }
 
-type IdListMode int16
+type GoAwayMsg struct {
+	Reason uint32
+}
+
+type IdListMode uint16
 
 const (
 	None = iota
 	CatchUp
-	lastIrrCatchUp
+	LastIrrCatchUp
 	Normal
 )
 
 type SelectIds struct {
-	mode    IdListMode
-	pending uint32
-	ids     []struct{}
+	Mode    IdListMode
+	Pending uint32
+	Ids     []interface{}
 }
 
 func (s *SelectIds) Empty() bool {
-	return s.mode == None || len(s.ids) == 0
+	return s.Mode == None || len(s.Ids) == 0
 }
 
 type DisconnectMsg struct {
-	reason errCode
+	Reason errCode
 }
 
 type TimeMsg struct {
-	orginTime       time.Time
-	recvTime        time.Time
-	transmitTime    time.Time
-	destinationTime time.Time
+	OrginTime       time.Time
+	RecvTime        time.Time
+	TransmitTime    time.Time
+	DestinationTime time.Time
 }
 
 type NoticeMsg struct {
-	txIds  SelectIds
-	blkIds SelectIds
+	TxIds  SelectIds
+	BlkIds SelectIds
 }
 
 type RequestMsg struct {
-	txIds  SelectIds
-	blkIds SelectIds
+	TxIds  SelectIds
+	BlkIds SelectIds
 }
 
 type SyncRequestMsg struct {
-	startBlkNum uint32
-	endBlkNum   uint32
+	StartBlkNum uint32
+	EndBlkNum   uint32
 }

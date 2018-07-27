@@ -25,7 +25,7 @@ import (
 	"time"
 
 	"datx_chain/utils/log"
-	
+
 	"datx_chain/plugins/p2p_plugin/p2p/discover"
 	"datx_chain/plugins/p2p_plugin/p2p/netutil"
 )
