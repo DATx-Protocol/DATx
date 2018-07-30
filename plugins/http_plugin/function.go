@@ -12,6 +12,7 @@ import (
 	"io/ioutil"
 	"log"
 	"net/http"
+	"sort"
 	"time"
 
 	simplejson "github.com/bitly/go-simplejson"
@@ -138,7 +139,9 @@ func FindTransaction() ([]*TransactionDetail, error) {
 		if result.BlockHeight < blockheight {
 			result.BlockHeight = blockheight
 		}
-		result.TimeStamp = val.BlockHeaderState.Header.TimeStamp.String()
+		t := val.BlockHeaderState.Header.TimeStamp.Time.Int64()
+		result.TimeStamp = time.Unix(t, 0).String()
+
 		for _, v := range val.Trxs {
 			for _, action := range v.Trx.Transaction.Actions {
 				data := action.Data
@@ -163,31 +166,45 @@ func FindTransaction() ([]*TransactionDetail, error) {
 
 //QueryTransactionById query transactiondetail by trx hash
 func QueryTransactionById(id common.Hash) *TransactionDetail {
-	var result *TransactionDetail
-
+	result := &TransactionDetail{}
+	transfer := &controller.Transfer{}
 	//init chain
 	plugin, err := application.App().Find("chain")
 	if err != nil {
 		log.Print("you do not add chainplugin to app before init the producerplugin")
 	}
 	chainplugin := plugin.(*chainplugin.ChainPlugin)
-	chain := chainplugin.Chain()
-
-	trx, t := chain.ForkDB.GetTrx(id)
-	result.TrxHash = trx.TransactionHash.String()
+	index := chainplugin.Chain().ForkDB.GetIndex()
 	result.TrxType = "Transfer"
-	result.TimeStamp = t.Time.String()
-	result.Amount = 0
 
-	transfer := &controller.Transfer{}
-	for _, action := range trx.Actions {
-		data := action.Data
-		if err := json.Unmarshal(data, &transfer); err == nil {
-			result.Amount += float64(transfer.Amount)
-			result.AccountFrom = transfer.From
-		} else {
-			log.Printf("Unmarshal json err : %v", err)
+	result.Amount = 0
+	for _, val := range index {
+		blockheight := int64(val.BlockHeaderState.BlockNum)
+		if result.BlockHeight < blockheight {
+			result.BlockHeight = blockheight
 		}
+
+		t := val.BlockHeaderState.Header.TimeStamp.Time.Int64()
+		result.TimeStamp = time.Unix(t, 0).String()
+
+		for _, v := range val.Trxs {
+			log.Printf("hash is -------:%v", id)
+			if v.ID == id {
+				result.TrxHash = v.ID.String()
+				for _, action := range v.Trx.Actions {
+					data := action.Data
+					if err := json.Unmarshal(data, &transfer); err == nil {
+						result.Amount += float64(transfer.Amount)
+						result.AccountFrom = transfer.From
+
+					} else {
+						log.Printf("Unmarshal json err : %v", err)
+					}
+				}
+
+			}
+		}
+
 	}
 
 	log.Printf("QueryTransactionById is  %v", result)
@@ -244,6 +261,19 @@ func QueryBlockByID(id common.Hash) *BlockByIDResult {
 	return res
 }
 
+//BlockSlice used in sort
+type BlockSlice []*BlockByIDResult
+
+func (a BlockSlice) Len() int {
+	return len(a)
+}
+func (a BlockSlice) Swap(i, j int) {
+	a[i], a[j] = a[j], a[i]
+}
+func (a BlockSlice) Less(i, j int) bool {
+	return a[j].BlockHeight < a[i].BlockHeight
+}
+
 //QueryBlocks return json of BlockList
 func QueryBlocks() []*BlockByIDResult {
 
@@ -257,17 +287,18 @@ func QueryBlocks() []*BlockByIDResult {
 
 	var index = chain.ForkDB.GetIndex()
 
-	blockcnt := 0
 	res := make([]*BlockByIDResult, 0)
 	for key := range index {
 		res = append(res, QueryBlockByID(key))
-		blockcnt++
-		if blockcnt >= 20 {
-			return res
-		}
 	}
 
-	return res
+	sort.Sort(BlockSlice(res))
+
+	blockcnt := len(res)
+	if blockcnt >= 20 {
+		blockcnt = 20
+	}
+	return res[0:blockcnt]
 }
 
 //GeneralInfo return json of GeneralInfo

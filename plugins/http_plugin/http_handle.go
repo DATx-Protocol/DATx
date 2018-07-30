@@ -1,15 +1,17 @@
 package httpplugin
 
 import (
+	"crypto/md5"
 	"datx_chain/chainlib/application"
 	"datx_chain/chainlib/controller"
 	"datx_chain/chainlib/types"
 	"datx_chain/plugins/chain_plugin"
+	"datx_chain/utils/common"
 	"datx_chain/utils/helper"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	template "html/template"
-	"io/ioutil"
 	"log"
 	"net/http"
 	"strconv"
@@ -20,23 +22,42 @@ import (
 var TransferHandler = func(w http.ResponseWriter, r *http.Request) {
 
 	if r.Method == "GET" || r.Method == "POST" {
-
-		// 	transfer.From = "avazudemo"
-		// 	tra, err := json.Marshal(transfer)
-		// 	if err != nil {
-		// 		res = fmt.Sprintf("Marshal json err: %v", err)
-		// 		w.Write([]byte(res))
-		// 	}
-		// 	w.Write(tra)
-		// } else {
+		var response string
 		r.ParseForm()
 		log.Printf("ParseFrom: %v", r.Form)
-
+		data := "20Awazu18"
 		from := r.Form["From"][0]
+		data += from
 		to := r.Form["To"][0]
-
+		data += to
+		a := r.Form["Amount"][0]
 		amount, _ := strconv.Atoi(r.Form["Amount"][0])
+		data += a
+		memo := r.Form["Memo"]
+		time := r.Form["time"]
+		token := r.Form["token"]
 
+		if len(memo) == 0 || len(time) == 0 || len(token) == 0 {
+			response = fmt.Sprintf("the token is wrong")
+			return
+		}
+		data += memo[0]
+		data += time[0]
+		log.Printf("data  is  %v", data)
+		d := []byte(data)
+		t := md5.Sum(d)
+		var x []byte
+		for _, v := range t {
+			x = append(x, v)
+		}
+		b := hex.EncodeToString(t[:])
+		log.Printf(" first md5 %v ", b)
+		c := md5.Sum([]byte(b))
+		if hex.EncodeToString(c[:]) != token[0] {
+			response = fmt.Sprintf("the token is wrong")
+			log.Printf("mytoken is :%v,posttoken is %v", hex.EncodeToString(c[:]), token[0])
+			return
+		}
 		// transaction, e := ioutil.ReadAll(r.Body)
 		// if e != nil {
 		// 	res = fmt.Sprintf("Marshal json err: %v", e)
@@ -49,7 +70,6 @@ var TransferHandler = func(w http.ResponseWriter, r *http.Request) {
 		var wait sync.WaitGroup
 		wait.Add(1)
 
-		var response string
 		pkg := CreatePackedTransaction(CreateTransfer("datx", from, to, uint16(amount)))
 		PushTransaction(pkg, func(inerr error, trace *types.TransactionTrace) {
 			if inerr != nil {
@@ -163,6 +183,7 @@ var GetTransactionListHandle = func(w http.ResponseWriter, r *http.Request) {
 	if r.Method == "POST" || r.Method == "GET" {
 		var res string
 		transactionList, e := FindTransaction()
+
 		if e != nil {
 			res = fmt.Sprintf("FindTransaction with error :%v ", e)
 			w.Write([]byte(res))
@@ -182,19 +203,17 @@ var GetTransactionListHandle = func(w http.ResponseWriter, r *http.Request) {
 var GetTransactionByHashHandle = func(w http.ResponseWriter, r *http.Request) {
 	if r.Method == "POST" || r.Method == "GET" {
 		var res string
-		tra := &TransactionDetail{}
-		trx, _ := ioutil.ReadAll(r.Body)
-		if err := json.Unmarshal(trx, &tra); err == nil {
-			id := helper.RLPHash(tra.TrxHash)
-			transaction, e := json.Marshal(QueryTransactionById(id))
-			w.Write(transaction)
-			if e != nil {
-				res = fmt.Sprintf("Marshal json err: %v", e)
-				w.Write([]byte(res))
+		r.ParseForm()
+		log.Printf("ParseFrom: %v", r.Form)
+		TrxHash := r.Form["TrxHash"]
+		if len(TrxHash) == 0 {
+			return
+		}
 
-			}
-		} else {
-			res = fmt.Sprintf("Unmarshal json err : %v", err)
+		transaction, e := json.Marshal(QueryTransactionById(common.HexToHash(TrxHash[0])))
+		w.Write(transaction)
+		if e != nil {
+			res = fmt.Sprintf("Marshal json err: %v", e)
 			w.Write([]byte(res))
 
 		}
