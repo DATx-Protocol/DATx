@@ -1,0 +1,14 @@
+#include <stdint.h>
+#include <Datx/utilities/git_revision.hpp>
+
+#define DATX_GIT_REVISION_SHA "@DATX_GIT_REVISION_SHA@"
+#define DATX_GIT_REVISION_UNIX_TIMESTAMP @DATX_GIT_REVISION_UNIX_TIMESTAMP@
+#define DATX_GIT_REVISION_DESCRIPTION "@DATX_GIT_REVISION_DESCRIPTION@"
+
+namespace datxio { namespace utilities {
+
+const char* const git_revision_sha = DATX_GIT_REVISION_SHA;
+const uint32_t git_revision_unix_timestamp = DATX_GIT_REVISION_UNIX_TIMESTAMP;
+const char* const git_revision_description = DATX_GIT_REVISION_DESCRIPTION;
+
+} } // end namespace datxio::utilities
