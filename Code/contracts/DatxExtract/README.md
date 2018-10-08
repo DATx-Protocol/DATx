@@ -1,7 +1,7 @@
 ## Compile smart contract：
 	cd ~/datx/Code/contracts/（path）
-	datxiocpp -o datxwithdraw.wast DatxWithdraw.cpp
-	datxiocpp -g datxwithdraw.abi DatxWithDraw.hpp
+	datxiocpp -o datxextract.wast DatxExtract.cpp
+	datxiocpp -g datxextract.abi DatxExtract.hpp
 
 ## Deploy smart contracts:
 ###	(1)creat wallet
@@ -16,26 +16,28 @@
 		
 	(4)create an account
 		cldatx create account datxio (name) (PublicKey)
-		for example: cldatx create account datxio datxio.withdraw DATX76kRKSJJVUb2bYLQUwjfSvoQsqU7mwzGCwbD9TtGfukhPwN43E
+		for example: cldatx create account datxio datxio.extract DATX76kRKSJJVUb2bYLQUwjfSvoQsqU7mwzGCwbD9TtGfukhPwN43E
 		
 	(5)deploy smart contracts
-		cldatx set contract datxio.charg ../../../contracts/DatxWithdraw  -p testdatxio.withdraw
+		cldatx set contract datxio.charg ../../../contracts/DatxExtract  -p testdatxio.extract
 
 
 ## push action
-	cldatx push action datxio.withdraw recordtrx '{"trxid":70b4643bf0648e47784bb115255ee96de9bade0b1479a7abae68b1e627e9a611,"handler":"bp1"}' -p bp1
+	cldatx push action datxio.extract recordtrx '{"trxid":70b4643bf0648e47784bb115255ee96de9bade0b1479a7abae68b1e627e9a611,"handler":"bp1"}' -p bp1
 
-    cldatx push action datxio.withdraw setdoing '{"trxid":70b4643bf0648e47784bb115255ee96de9bade0b1479a7abae68b1e627e9a611,"handler":"bp1","verifier":"verifier1"}' -p verifier1
+	cldatx push action datxio.extract setverifiers '{"verifiers":["v1","v2","v3","v4","v5"]}' -p datxio.extract
 
-    cldatx push action datxio.withdraw setsuccess '{"trxid":70b4643bf0648e47784bb115255ee96de9bade0b1479a7abae68b1e627e9a611,"handler":"bp1"}' -p bp1
+    cldatx push action datxio.extract setdoing '{"trxid":70b4643bf0648e47784bb115255ee96de9bade0b1479a7abae68b1e627e9a611,"handler":"bp1","verifier":"verifier1"}' -p verifier1
 
-    cldatx push action datxio.withdraw setverifiers '{"verifiers":["v1","v2","v3","v4","v5"]}' -p datxio.withdraw
+    cldatx push action datxio.extract setsuccess '{"trxid":70b4643bf0648e47784bb115255ee96de9bade0b1479a7abae68b1e627e9a611,"handler":"bp1"}' -p bp1
+
+
 
 ## get table
 	cldatx get table code scope  table_name
-	for example:cldatx get table datxio.withdraw datxio.withdraw record
-				cldatx get table datxio.withdraw datxio.withdraw success
-                cldatx get table datxio.withdraw datxio.withdraw expiration
+	for example:cldatx get table datxio.extract datxio.extract record
+				cldatx get table datxio.extract datxio.extract success
+                cldatx get table datxio.extract datxio.extract expiration
 
 ## make sure every step you wallet is unlock
 	cldatx wallet unlock --name (name) --password (password)

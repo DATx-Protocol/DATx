@@ -7,12 +7,12 @@
 namespace datxio
 {
 using std::string;
-class withdraw : public contract
+class extract : public contract
 {
   private:
     void expiretrx();
   public:
-    withdraw(account_name self) : contract(self) {}
+    extract(account_name self) : contract(self) {}
 
     /// @abi action
     void recordtrx(transaction_id_type trxid, account_name handler);
@@ -37,22 +37,22 @@ class withdraw : public contract
     {
         uint64_t            id; 
         transaction_id_type trxid;
-        time                start_time;
-        vector<string>      verifiers;
-        time                countdown_time;
-        vector<string>      successverifiers;
+        uint64_t                start_time;
+        vector<account_name>      verifiers;
+        uint64_t                countdown_time;
+        vector<account_name>      successverifiers;
         account_name        handler;
         string              category;
 
         uint64_t primary_key() const { return id; }
         key256 by_fixed_key() const {return get_fixed_key(trxid);}
-        time by_start_time() const {return start_time;}
+        uint64_t by_start_time() const {return start_time;}
 
         DATXLIB_SERIALIZE(record, (id)(trxid)(start_time)(verifiers)(countdown_time)(successverifiers)(handler)(category))
     };
 
     typedef multi_index<N(record), record,indexed_by<N(fixed_key), const_mem_fun<record, key256, &record::by_fixed_key>>
-        ,indexed_by<N(start_time),const_mem_fun<record,time,&record::by_start_time>>> records;
+        ,indexed_by<N(start_time),const_mem_fun<record,uint64_t,&record::by_start_time>>> records;
 
     /// @abi table
     struct success
@@ -60,7 +60,7 @@ class withdraw : public contract
         uint64_t            id;
         transaction_id_type trxid;
         account_name        handler;
-        time                timestamp;
+        uint64_t                timestamp;
         string              category;            
 
         uint64_t primary_key() const { return id; }
@@ -76,7 +76,7 @@ class withdraw : public contract
         uint64_t            id; 
         transaction_id_type trxid;
         account_name        handler;
-        time                timestamp;
+        uint64_t            timestamp;
         string              category;
 
         uint64_t primary_key() const { return id; }
@@ -95,7 +95,7 @@ class withdraw : public contract
         uint64_t primary_key() const { return account; }
         DATXLIB_SERIALIZE(verifier, (account))
     };
-    typedef datxio::multi_index<N(verifiers), verifier> verifiers;
+    typedef datxio::multi_index<N(verifier), verifier> verifiers;
 
 };
 

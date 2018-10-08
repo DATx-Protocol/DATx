@@ -1,11 +1,11 @@
-#include "DatxWithdraw.hpp"
+#include "DatxExtract.hpp"
 #include <DatxioLib/multi_index.hpp>
 #include <DatxioLib/chain.h>
 
 namespace datxio
 {
     /// @abi action
-    void withdraw::recordtrx(transaction_id_type trxid, account_name handler)
+    void extract::recordtrx(transaction_id_type trxid, account_name handler)
     {   
         require_auth(handler);
         
@@ -32,24 +32,20 @@ namespace datxio
         auto idx3 = expire_table.template get_index<N(fixed_key)>();
         auto itr3 = idx3.find(get_fixed_key(trxid) );
         if(itr3 != idx3.end()){
-            expire_table.erase(itr3);
+            expire_table.erase(*itr3);
         }
-
-        //get transcation detail
-        //TODO
 
         trans_table.emplace(_self, [&](auto &s) {
             s.id= trans_table.available_primary_key();
             s.trxid= trxid;
             s.start_time = current_time();
             s.handler = handler;
-            s.category = "";
         });
     }
 
 
     /// @abi action
-    void withdraw::setverifiers(vector<account_name> accounts){
+    void extract::setverifiers(vector<account_name> accounts){
         require_auth(_self);
 
         verifiers veri_table(_self,_self);
@@ -65,10 +61,11 @@ namespace datxio
     }
 
     /// @abi action
-    void withdraw::setdoing(transaction_id_type trxid, account_name handler,account_name verifier){
+    void extract::setdoing(transaction_id_type trxid, account_name handler,account_name verifier){
         require_auth(verifier);
         verifiers veri_table(_self,_self);
-        auto& check = veri_table.get( verifier, "verifier not found" );
+        auto vidx = veri_table.find(verifier);
+        datxio_assert(vidx != veri_table.end(),"verifier is not exists");
 
         records trans_table(_self,_self);
         auto idx = trans_table.template get_index<N(fixed_key)>();
@@ -77,14 +74,15 @@ namespace datxio
         datxio_assert(itr->handler == handler, "trxid not this handler");
         
         auto itr2 = std::find( itr->verifiers.begin(), itr->verifiers.end(), verifier );
-        datxio_assert( itr2 != itr->verifiers.end(), "this verifier has comfirmed this trxid" );
+        print("verifier name",N(*itr2),"\n");
+        datxio_assert( itr2 == itr->verifiers.end(), "this verifier has comfirmed this trxid" );
 
-        trans_table.modify(itr, get_self(), [&](auto& p)
+        trans_table.modify(*itr, get_self(), [&](auto& p)
                                               {
                                                 p.verifiers.push_back(verifier);
                                               });
         if(itr->verifiers.size() < 15){
-            trans_table.modify(itr, get_self(), [&](auto& p)
+            trans_table.modify(*itr, get_self(), [&](auto& p)
                                               {
                                                 p.countdown_time = current_time();
                                               });
@@ -92,25 +90,18 @@ namespace datxio
     }
     
     /// @abi action
-    void withdraw::setsuccess(transaction_id_type trxid ,account_name handler){
+    void extract::setsuccess(transaction_id_type trxid ,account_name verifier){
         
-        require_auth(handler);
-        
-        account_name producers[21]; 
-        uint32_t bytes_populated = get_active_producers(producers, sizeof(account_name)*21); 
-        bool Isproducer = false; 
-        for (int i = 0; i < sizeof(producers)/sizeof(account_name) ;i++){ 
-             if(producers[i] == handler) 
-             Isproducer = true; 
-        } 
-        datxio_assert(Isproducer, "this func can only be called by producers");
+        require_auth(verifier);
+        verifiers veri_table(_self,_self);
+        auto& check = veri_table.get( verifier, "verifier not found" );
 
         records trans_table(_self,_self);
         auto idx = trans_table.template get_index<N(fixed_key)>();
         auto itr = idx.find(get_fixed_key(trxid) );
         datxio_assert(itr == idx.end(), "trxid not in doing records");
 
-        trans_table.modify(itr, get_self(), [&](auto& p)
+        trans_table.modify(*itr, get_self(), [&](auto& p)
                                               {
                                                 p.successverifiers.push_back(verifier);
                                               });
@@ -123,12 +114,12 @@ namespace datxio
                 s.handler = itr -> handler;
                 s.timestamp = current_time();
             });
-            trans_table.erase(itr);
+            trans_table.erase(*itr);
         }
         
     }
 
-    void withdraw::expiretrx(){
+    void extract::expiretrx(){
         records trans_table(_self,_self);
         auto idx = trans_table.template get_index<N(start_time)>();
         for ( auto it = idx.cbegin(); it != idx.cend();) {
@@ -138,12 +129,12 @@ namespace datxio
             if(it->verifiers.size() < 15){
                 expirations expire_table(_self,_self);
                 expire_table.emplace(_self, [&](auto &s) {
-                    s.id= success_table.available_primary_key();
-                    s.trxid= trxid;
+                    s.id= expire_table.available_primary_key();
+                    s.trxid= it->trxid;
                     s.timestamp = current_time();
-                    s.handler = it -> handler;
+                    s.handler = it->handler;
                 });
-                trans_table.erase(it);
+                trans_table.erase(*it);
             }
             else{
                  ++it; 
@@ -152,9 +143,9 @@ namespace datxio
     }
 
     void rollbacktrx(){
-        //scan for trx to rollback
+        
     }
 
 } // namespace Datxio
 
-DATXIO_ABI( datxio::withdraw, (recordtrx)(setverifiers)(setdoing)(setsuccess))
+DATXIO_ABI( datxio::extract, (recordtrx)(setverifiers)(setdoing)(setsuccess))
