@@ -40,6 +40,8 @@ DATX——ACROSSCHAIN
     value     提现金额，以聪为单位
     fee       手续费，以聪为单位，用户承担
     trxid     datx链上交易ID
+    nodeName  结点名称
+    sign      to + value + fee + trxid + isTestnet 进行Ecc加密后的结果
 ### 返回：
     transaction id
 
@@ -49,17 +51,27 @@ DATX——ACROSSCHAIN
     IsTestnet       是否为测试网络
     trxSerialize    交易的hex形式
     trxid           datx链上的交易ID
+    nodeName        节点名称
+    sign            trxSerialize + trxid + isTestnet ECC加密后的结果    
 ### 返回：
     020000000144bd36311739e090ad98616e93882c321676c76eb48d9a9583a6cdc19dfa7fce01000000b60047304402201d4212a73b92bdef0b61199eae990b0439d303edfe01e1ec9fa37d15a04c3037022065ddaf3d42369d07f07c7083d52d9f87b0905459e910ff0745e91dff9cdf255e0100004c69522103a4ac53ded034de0ce8e1a5aa8cae967a7c33f8ef807ee31d0a972fbcd912c8cb21038e6c355aa3a7b0a3338215e1fb952c1c255eab07012c800a151f8fd7bb9feac92102c8a936b526d91e6047569ec8fd53779a2368a150d63cea655fc9c7ba66d2199e53aeffffffff0280969800000000001976a914fdedbbbf546a9344fffa80f433b2ebd9b60b245988ac809698000000000017a9140535e10b0244b05ae907edeabb43f1cd80e0f1d68700000000
+
+
+
+## 比特币解码MEMO信息 https://127.0.0.1:8080/btc/decodeMemo?script=6a0d626974636f696e6a732d6c6962
+### 参数：
+    script 锁定脚本的hex形式 OP_RETURN MEMO
+### 返回：
+    解码后的MEMO信息
 
 
 ## 以太坊提现请求 https://localhost:8080/eth/withdraw?to=ccc&value=100000&data=data&trxid=asdasd
 ### 参数：
     to              提现目标地址
     value           提现金额（wei）
-    data            附加信息
     trxid           datx链上的交易ID
-
+    nodeName        节点名称
+    sign            to + value + trxid ECC加密后的结果
 ### 返回：
     success
 
@@ -69,7 +81,7 @@ DATX——ACROSSCHAIN
     creator     创建人，本节点EOS账户
     accountName 创建账户名称
     auth        账户权限设置，json格式
-
+    creatorKey  创建人私钥
 ### 返回：
     包含交易id的json格式结果
 
@@ -81,11 +93,13 @@ DATX——ACROSSCHAIN
 ### 返回参数：
     包含交易id的json格式结果
 
-## EOS发起提现请求 https://localhost:8080/eos/withdraw?to=aaaaa&value=1000.0000 EOS&trxid=aaaa
+## EOS发起提现请求 https://localhost:8080/eos/withdraw?to=aaaaa&value=1000.0000&trxid=aaaa
 ### 参数：
-    to      收款账户
-    value   金额与类型
-    trxid   datx链上的交易ID
+    to          收款账户
+    value       金额与类型
+    trxid       datx链上的交易ID
+    nodeName    节点名称
+    sign        to + value + trxid ECC加密后的结果
 ### 返回参数：
     包含交易id的json格式结果
 
@@ -94,6 +108,8 @@ DATX——ACROSSCHAIN
     proposer    提案发起账户
     proposeName 提案名称
     trxid       datx链上的交易ID
+    nodeName    节点名称
+    sign        proposer + proposeName + trxid ECC加密后的结果
 ### 返回参数：
     包含交易id的json格式结果
 

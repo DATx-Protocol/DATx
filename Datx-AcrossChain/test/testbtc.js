@@ -32,32 +32,31 @@
 
 
 // describe('simulate bitcoin withdraw',function(){
-    (async function(){
-        script = '522103a4ac53ded034de0ce8e1a5aa8cae967a7c33f8ef807ee31d0a972fbcd912c8cb21038e6c355aa3a7b0a3338215e1fb952c1c255eab07012c800a151f8fd7bb9feac92102c8a936b526d91e6047569ec8fd53779a2368a150d63cea655fc9c7ba66d2199e53ae'
-        //buildTrx
-        trx = await bitcoinapi.buildTrx('2MsimupueVskjJMy79kKGP5uzfCWfZuK8TD','n4fc3bKTVrVRveBrHZf5Zv4wGGBTf5sdHg',2e3,1e3,{IsTestnet:1})
+    // (async function(){
+    //     script = '522103a4ac53ded034de0ce8e1a5aa8cae967a7c33f8ef807ee31d0a972fbcd912c8cb21038e6c355aa3a7b0a3338215e1fb952c1c255eab07012c800a151f8fd7bb9feac92102c8a936b526d91e6047569ec8fd53779a2368a150d63cea655fc9c7ba66d2199e53ae'
+    //     //buildTrx
+    //     trx = await bitcoinapi.buildTrx('2MsimupueVskjJMy79kKGP5uzfCWfZuK8TD','n4fc3bKTVrVRveBrHZf5Zv4wGGBTf5sdHg',2e3,1e3,{IsTestnet:1})
 
-        //sign locally
-        trx = await bitcoinapi.signTrx(trx,'cV6dJVkPZfmmDg5XHNpExd8fgMTaoYgv7NusH26ZEFj2vcA9xvhz',script,{IsTestnet:1})
-        trx = await bitcoinapi.signTrx(trx,'cV6dJVkPZfmmDg5XHNpExd8fgMTaoYgv7NusH26ZEFj2vcA9xvhz',script,{IsTestnet:1})
+    //     //sign locally
+    //     trx = await bitcoinapi.signTrx(trx,'cV6dJVkPZfmmDg5XHNpExd8fgMTaoYgv7NusH26ZEFj2vcA9xvhz',script,{IsTestnet:1})
     
-        //sign remotly
-        trxSerialize = trx.toHex()
-        trx = bitcoinapi.getTrxFromHex(trxSerialize)
-        trx = await bitcoinapi.signTrx(trx,'cQX7uYfhPJJGPdoqgHQXLC4WQWcDXGH7DgLs4m89xWykYkg1V4iA',script,{IsTestnet:1})
-        trxSerialize = trx.toHex()
+    //     //sign remotly
+    //     trxSerialize = trx.toHex()
+    //     trx = bitcoinapi.getTrxFromHex(trxSerialize)
+    //     trx = await bitcoinapi.signTrx(trx,'cQX7uYfhPJJGPdoqgHQXLC4WQWcDXGH7DgLs4m89xWykYkg1V4iA',script,{IsTestnet:1})
+    //     trxSerialize = trx.toHex()
 
-        //broadcast trx
-        trx = bitcoinapi.getTrxFromHex(trxSerialize)
-        bitcoinapi.broadcastTrx(trx) 
-    })()
+    //     //broadcast trx
+    //     trx = bitcoinapi.getTrxFromHex(trxSerialize)
+    //     bitcoinapi.broadcastTrx(trx) 
+    // })()
 // })
-//const bitcoin = require('bitcoinjs-lib');
+const bitcoin = require('bitcoinjs-lib');
 //result = bitcoin.classify.output(Buffer.from('6a0d626974636f696e6a732d6c6962','hex'));
 //console.log(result);
 //console.log(bitcoin.script.toASM(Buffer.from('6a0d626974636f696e6a732d6c6962','hex')));
-//result = bitcoin.script.decompile(Buffer.from('6a0d626974636f696e6a732d6c6962','hex')).slice(1).toString('utf8');
+result = bitcoin.script.decompile(Buffer.from('6a0d626974636f696e6a732d6c6962','hex')).slice(1).toString('utf8');
 //console.log(result);
 
 //result = Buffer.from('626974636f696e6a732d6c6962','hex').toString('utf8');
-//console.log(result);
+console.log(result);

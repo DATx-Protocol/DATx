@@ -3,46 +3,61 @@ const bitcoin = require('bitcoinjs-lib');
 const http2 = require('./http');
 const urlParse = require('url').parse;
 const pushtx = require('blockchain.info/pushtx').usingNetwork(3);
-const client = require('./client.js')
 
-//const redis = require('./redis.js');
+const redis = require('./redis.js');
 
 function genKeyPairs(options) {
-  IsTestnet = options && options.IsTestnet;
-  network = IsTestnet ? bitcoin.networks.testnet : bitcoin.networks.bitcoin;
-  keyPair = bitcoin.ECPair.makeRandom({network: network});
-  return {
-    wif: keyPair.toWIF(),
-    pubkey: keyPair.publicKey.toString('hex'),
-    prikey: keyPair.privateKey.toString('hex')
-  };
+  try{
+    IsTestnet = options && options.IsTestnet;
+    network = IsTestnet ? bitcoin.networks.testnet : bitcoin.networks.bitcoin;
+    keyPair = bitcoin.ECPair.makeRandom({network: network});
+    return {
+      wif: keyPair.toWIF(),
+      pubkey: keyPair.publicKey.toString('hex'),
+      prikey: keyPair.privateKey.toString('hex')
+    };
+  }catch(e){
+    return {};
+  }
 }
 
 function getKeysFromWIF(wif, options) {
-  IsTestnet = options && options.IsTestnet;
-  network = IsTestnet ? bitcoin.networks.testnet : bitcoin.networks.bitcoin;
-  keyPair = bitcoin.ECPair.fromWIF(wif, network);
-  return {
-    pubkey: keyPair.publicKey.toString('hex'),
-    prikey: keyPair.privateKey.toString('hex')
-  };
+  try{
+    IsTestnet = options && options.IsTestnet;
+    network = IsTestnet ? bitcoin.networks.testnet : bitcoin.networks.bitcoin;
+    keyPair = bitcoin.ECPair.fromWIF(wif, network);
+    return {
+      pubkey: keyPair.publicKey.toString('hex'),
+      prikey: keyPair.privateKey.toString('hex')
+    };
+  }catch(e){
+    return {};
+  }
 }
 
 function genP2PKHAddr(publicKey, options) {
-  publicKey = Buffer.from(publicKey, 'hex');
-  IsTestnet = options && options.IsTestnet;
-  network = IsTestnet ? bitcoin.networtexks.testnet : bitcoin.networks.bitcoin;
-  address = bitcoin.payments.p2pkh({pubkey: publicKey, network: network}).address;
-  return address;
+  try{
+    publicKey = Buffer.from(publicKey, 'hex');
+    IsTestnet = options && options.IsTestnet;
+    network = IsTestnet ? bitcoin.networtexks.testnet : bitcoin.networks.bitcoin;
+    address = bitcoin.payments.p2pkh({pubkey: publicKey, network: network}).address;
+    return address;
+  }catch(e){
+    return '';
+  }
 }
 
 function genMulSigAddr(pubkeys, num, options) {
-  pubkeys = pubkeys.map(pubkey => Buffer.from(pubkey, 'hex'));
-  IsTestnet = options && options.IsTestnet;
-  network = IsTestnet ? bitcoin.networks.testnet : bitcoin.networks.bitcoin;
-  p2ms = bitcoin.payments.p2ms({m: num, pubkeys: pubkeys, network: network});
-  p2sh = bitcoin.payments.p2sh({redeem: p2ms, network: network});
-  return {address: p2sh.address, script: p2sh.redeem.output.toString('hex')};
+  try{
+    pubkeys = pubkeys.map(pubkey => Buffer.from(pubkey, 'hex'));
+    IsTestnet = options && options.IsTestnet;
+    network = IsTestnet ? bitcoin.networks.testnet : bitcoin.networks.bitcoin;
+    p2ms = bitcoin.payments.p2ms({m: num, pubkeys: pubkeys, network: network});
+    p2sh = bitcoin.payments.p2sh({redeem: p2ms, network: network});
+    return {address: p2sh.address, script: p2sh.redeem.output.toString('hex')};
+  }catch(e){
+    return {};
+  }
 }
 
 function getTrxDetail(trxid,options){
@@ -106,7 +121,7 @@ function getUTXOS(from, options) {
   });
 }
 
-async function buildTrx(from, to, value, fee, options) {
+async function buildTrx(from, to, value, fee, options,memo) {
   IsTestnet = options && options.IsTestnet;
   network = IsTestnet ? bitcoin.networks.testnet : bitcoin.networks.bitcoin;
   chunk = await getUTXOS(from, options);
@@ -115,11 +130,11 @@ async function buildTrx(from, to, value, fee, options) {
   utxosUsed = new Array();
   sum = 0;
   for (let unspent of utxos.unspent_outputs) {
-    // if (redis.client.sismember("spentUTXOS",unspent.tx_hash_big_endian + unspent.tx_output_n))
-    //   continue;
+    if (await redis.sismemberAsync("spentUTXOS",unspent.tx_hash_big_endian + unspent.tx_output_n))
+      continue;
 
     utxosUsed.push(unspent);
-    //redis.client.sadd("spentUTXOS",unspent.tx_hash_big_endian + unspent.tx_output_n);
+    redis.client.sadd("spentUTXOS",unspent.tx_hash_big_endian + unspent.tx_output_n);
     sum += unspent.value;
     if (sum >= value) break;
   }
@@ -132,7 +147,7 @@ async function buildTrx(from, to, value, fee, options) {
   txb.addOutput(to, value - fee);
   txb.addOutput(from, sum - value);
 
-  data = Buffer.from('bitcoinjs-lib', 'utf8');
+  data = Buffer.from(memo, 'utf8');
   embed = bitcoin.payments.embed({ data : [data],network : network });
   txb.addOutput(embed.output, 0);
   return txb.buildIncomplete();
@@ -150,11 +165,12 @@ async function signTrx(trx, wif, script, options) {
   for (var i = 0; i < inputCount; i++) {
     try{
       txb.sign(i, keyPair, scriptbuffer);
+      if (! await redis.sismemberAsync("spentUTXOS",insDecode[i].txid + insDecode[i].n.toString()))
+      redis.client.sadd("spentUTXOS",insDecode[i].txid + insDecode[i].n.toString());
     }
     catch(e){
       // do nothing
     }
-    //redis.client.sadd("spentUTXOS",insDecode[i].txid + insDecode[i].n.toString());
   }
 
   return txb.buildIncomplete();
@@ -219,7 +235,7 @@ function decodeOutput(tx, options){
           vout.scriptPubKey.addresses.push(bitcoin.address.fromOutputScript(out.script, network));
           break;
       case 'nulldata':
-          vout.scriptPubKey.addresses.push(bitcoin.script.decompile(out.dcript).slice(1).toString('utf8'));
+          vout.scriptPubKey.addresses.push(bitcoin.script.decompile(out.script).slice(1).toString('utf8'));
           break;
       }
       return vout
@@ -230,6 +246,11 @@ function decodeOutput(tx, options){
       result.push(format(out, n, network));
   })
   return result
+}
+
+function decodeMemo(script){
+  result = bitcoin.script.decompile(Buffer.from(script,'hex')).slice(1).toString('utf8');
+  return result;
 }
 
 module.exports = {
@@ -244,5 +265,6 @@ module.exports = {
   getTrxBuilder,
   decodeInput,
   decodeOutput,
-  getTrxDetail
+  getTrxDetail,
+  decodeMemo
 }

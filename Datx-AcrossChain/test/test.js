@@ -1,3 +1,9 @@
-redis = require("../lib/redis.js")
+redis = require("../lib/redis.js");
 
-console.log(redis);
+(async function(){
+
+    if(await redis.sismemberAsync('qqqq','bbbbbb') == 11){
+    console.log('success');
+    }
+})();
+

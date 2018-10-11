@@ -1,18 +1,18 @@
-Eos = require('eosjs');
-var path = require('path');
+const Eos = require('eosjs');
+const path = require('path');
 
-var INI = require("../lib/ini-file-loader");
-var confPath = path.resolve(__dirname, '../config/config.ini');
-var ini___ = INI.loadFileSync(confPath);
-var se = ini___.getOrCreateSection("node config");
+const INI = require("../lib/ini-file-loader");
+const confPath = path.resolve(__dirname, '../config/config.ini');
+const ini___ = INI.loadFileSync(confPath);
+const se = ini___.getOrCreateSection("node config");
 
-var BigNumber = require("bignumber.js")
+const BigNumber = require("bignumber.js")
+
+const chainid = se["eos-chainid"];
+const httpEndpoint = se["eos-endpoint"];
+const eos = Eos({httpEndpoint, chainid, keyProvider: () => userProvidedKey});
 
 let userProvidedKey = null;
-
-chainid = se["eos-chainid"];
-httpEndpoint = se["eos-endpoint"];
-eos = Eos({httpEndpoint, chainid, keyProvider: () => userProvidedKey});
 
 async function createAccount(creator, creatorKey, accountName, auth) {
   userProvidedKey = creatorKey;
