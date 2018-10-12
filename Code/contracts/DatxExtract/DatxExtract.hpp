@@ -10,21 +10,25 @@ using std::string;
 class extract : public contract
 {
   private:
-    void expiretrx();
+    // void expiretrx();
+    void rollbacktrx();
   public:
     extract(account_name self) : contract(self) {}
 
     /// @abi action
-    void recordtrx(transaction_id_type trxid, account_name handler);
+    void recordtrx(transaction_id_type trxid, account_name producer,string category);
 
     /// @abi action
-    void setdoing(transaction_id_type trxid, account_name handler,account_name verifier);
+    void setdoing(transaction_id_type trxid, account_name producer,account_name verifier);
     
     /// @abi action
-    void setsuccess(transaction_id_type trxid, account_name handler);
+    void setsuccess(transaction_id_type trxid, account_name producer);
     
     /// @abi action
     void setverifiers(vector<account_name> verifiers);
+
+    /// @abi action
+    void updateexpire();
 
     static key256 get_fixed_key(const checksum256& trxid) {
         const uint64_t *p64 = reinterpret_cast<const uint64_t *>(&trxid);
@@ -37,36 +41,34 @@ class extract : public contract
     {
         uint64_t            id; 
         transaction_id_type trxid;
-        uint64_t                start_time;
+        uint32_t                start_time;
         vector<account_name>      verifiers;
-        uint64_t                countdown_time;
-        vector<account_name>      successverifiers;
-        account_name        handler;
+        uint32_t                countdown_time;
+        vector<account_name>      successconfirm;
+        account_name        producer;
         string              category;
 
         uint64_t primary_key() const { return id; }
         key256 by_fixed_key() const {return get_fixed_key(trxid);}
-        uint64_t by_start_time() const {return start_time;}
 
-        DATXLIB_SERIALIZE(record, (id)(trxid)(start_time)(verifiers)(countdown_time)(successverifiers)(handler)(category))
+        DATXLIB_SERIALIZE(record, (id)(trxid)(start_time)(verifiers)(countdown_time)(successconfirm)(producer)(category))
     };
 
-    typedef multi_index<N(record), record,indexed_by<N(fixed_key), const_mem_fun<record, key256, &record::by_fixed_key>>
-        ,indexed_by<N(start_time),const_mem_fun<record,uint64_t,&record::by_start_time>>> records;
+    typedef multi_index<N(record), record,indexed_by<N(fixed_key), const_mem_fun<record, key256, &record::by_fixed_key>>> records;
 
     /// @abi table
     struct success
     {
         uint64_t            id;
         transaction_id_type trxid;
-        account_name        handler;
-        uint64_t                timestamp;
+        account_name        producer;
+        uint32_t                timestamp;
         string              category;            
 
         uint64_t primary_key() const { return id; }
         key256 by_fixed_key() const {return get_fixed_key(trxid);}
 
-        DATXLIB_SERIALIZE(success, (id)(trxid)(handler)(timestamp)(category))
+        DATXLIB_SERIALIZE(success, (id)(trxid)(producer)(timestamp)(category))
     };
     typedef datxio::multi_index<N(success), success,indexed_by<N(fixed_key), const_mem_fun<success, key256, &success::by_fixed_key>>> successtrxs;
 
@@ -75,14 +77,14 @@ class extract : public contract
     {
         uint64_t            id; 
         transaction_id_type trxid;
-        account_name        handler;
-        uint64_t            timestamp;
+        account_name        producer;
+        uint32_t            timestamp;
         string              category;
 
         uint64_t primary_key() const { return id; }
         key256 by_fixed_key() const {return get_fixed_key(trxid);}
 
-        DATXLIB_SERIALIZE(expiration, (id)(trxid)(handler)(timestamp)(category))
+        DATXLIB_SERIALIZE(expiration, (id)(trxid)(producer)(timestamp)(category))
     };
     typedef datxio::multi_index<N(expiration), expiration,indexed_by<N(fixed_key), const_mem_fun<expiration, key256, &expiration::by_fixed_key>>> expirations;
 

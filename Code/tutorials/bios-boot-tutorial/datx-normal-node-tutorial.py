@@ -118,11 +118,11 @@ def startNode(nodeIndex, account):
         '    --producer-name ' + account['name'] +
         '    --private-key \'["' + account['pub'] + '","' + account['pvt'] + '"]\''
         '    --plugin datxio::http_plugin'
-        '    --plugin datxio::chain_api_plugin'
+        '    --plugin datxio::core_api_plugin'
         '    --plugin datxio::producer_plugin' +
-        '    --plugin datxio::chain_plugin'
-        '    --plugin datxio::net_plugin' +
-        '    --plugin datxio::net_api_plugin' +
+        '    --plugin datxio::core_plugin'
+        '    --plugin datxio::p2p_net_plugin' +
+        '    --plugin datxio::p2p_net_api_plugin' +
         otherOpts)
     with open(dir + 'stderr', mode='w') as f:
         f.write(cmd + '\n\n')

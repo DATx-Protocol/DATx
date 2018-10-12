@@ -214,11 +214,11 @@ const char* error_advice_missing_auth_exception =  R"=====(Ensure that you have 
 If you are currently using 'cldatx push action' command, try to add the relevant authority using -p option.)=====";
 const char* error_advice_irrelevant_auth_exception =  "Please remove the unnecessary authority from your action!";
 
-const char* error_advice_missing_chain_api_plugin_exception =  "Ensure that you have \033[2mdatxio::chain_api_plugin\033[0m\033[32m added to your node's configuration!";
+const char* error_advice_missing_core_api_plugin_exception =  "Ensure that you have \033[2mdatxio::core_api_plugin\033[0m\033[32m added to your node's configuration!";
 const char* error_advice_missing_wallet_api_plugin_exception =  "Ensure that you have \033[2mdatxio::wallet_api_plugin\033[0m\033[32m added to your node's configuration!\n"\
                                     "Otherwise specify your wallet location with \033[2m--wallet-url\033[0m\033[32m argument!";
 const char* error_advice_missing_history_api_plugin_exception =  "Ensure that you have \033[2mdatxio::history_api_plugin\033[0m\033[32m added to your node's configuration!";
-const char* error_advice_missing_net_api_plugin_exception =  "Ensure that you have \033[2mdatxio::net_api_plugin\033[0m\033[32m added to your node's configuration!";
+const char* error_advice_missing_p2p_net_api_plugin_exception =  "Ensure that you have \033[2mdatxio::p2p_net_api_plugin\033[0m\033[32m added to your node's configuration!";
 
 const char* error_advice_wallet_exist_exception =  "Try to use different wallet name.";
 const char* error_advice_wallet_nonexistent_exception =  "Are you sure you typed the wallet name correctly?";
@@ -257,10 +257,10 @@ const std::map<int64_t, std::string> error_advice = {
    { missing_auth_exception::code_value, error_advice_missing_auth_exception },
    { irrelevant_auth_exception::code_value, error_advice_irrelevant_auth_exception },
 
-   { missing_chain_api_plugin_exception::code_value, error_advice_missing_chain_api_plugin_exception },
+   { missing_core_api_plugin_exception::code_value, error_advice_missing_core_api_plugin_exception },
    { missing_wallet_api_plugin_exception::code_value, error_advice_missing_wallet_api_plugin_exception },
    { missing_history_api_plugin_exception::code_value, error_advice_missing_history_api_plugin_exception },
-   { missing_net_api_plugin_exception::code_value, error_advice_missing_net_api_plugin_exception },
+   { missing_p2p_net_api_plugin_exception::code_value, error_advice_missing_p2p_net_api_plugin_exception },
 
    { wallet_exist_exception::code_value, error_advice_wallet_exist_exception },
    { wallet_nonexistent_exception::code_value, error_advice_wallet_nonexistent_exception },

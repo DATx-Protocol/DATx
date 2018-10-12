@@ -34,7 +34,7 @@ will explain how to use some of the APIs to get information about the blockchain
 
 Before you can query `datxd` you must first enable the necessary API plugin(s). Depending on which API you want to enable, add the following line to your `datxd`'s `config.ini`:
 ```
-plugin = datxio::chain_api_plugin // Enable Chain API
+plugin = datxio::core_api_plugin // Enable Chain API
 plugin = datxio::wallet_api_plugin // Enable Wallet API
 ```
 Alternatively, for Wallet API, you can also have the wallet functionality separate from `datxd`, by running `datx-walletd` separately.

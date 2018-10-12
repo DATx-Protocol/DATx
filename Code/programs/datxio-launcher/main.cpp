@@ -322,7 +322,7 @@ struct last_run_def {
 };
 
 
-enum class p2p_plugin {
+enum class bp2p_plugin {
    NET,
    BNET
 };
@@ -394,7 +394,7 @@ struct launcher_def {
   size_t producers;
   size_t next_node;
   string shape;
-  p2p_plugin p2p;
+  bp2p_plugin p2p;
   allowed_connection allowed_connections = PC_NONE;
   bfs::path genesis;
   bfs::path output;
@@ -544,15 +544,15 @@ launcher_def::initialize (const variables_map &vmap) {
   string nc = vmap["p2p-plugin"].as<string>();
   if ( !nc.empty() ) {
      if (boost::iequals(nc,"net"))
-        p2p = p2p_plugin::NET;
+        p2p = bp2p_plugin::NET;
      else if (boost::iequals(nc,"bnet"))
-        p2p = p2p_plugin::BNET;
+        p2p = bp2p_plugin::BNET;
      else {
-        p2p = p2p_plugin::NET;
+        p2p = bp2p_plugin::NET;
      }
   }
   else {
-     p2p = p2p_plugin::NET;
+     p2p = bp2p_plugin::NET;
   }
 
   if( !host_map_file.empty() ) {
@@ -1027,12 +1027,12 @@ launcher_def::write_config_file (tn_node_def &node) {
    cfg << "send-whole-blocks = true\n";
    cfg << "http-server-address = " << host->host_name << ":" << instance.http_port << "\n";
    cfg << "http-validate-host = false\n";
-   if (p2p == p2p_plugin::NET) {
+   if (p2p == bp2p_plugin::NET) {
       cfg << "p2p-listen-endpoint = " << host->listen_addr << ":" << instance.p2p_port << "\n";
       cfg << "p2p-server-address = " << host->public_name << ":" << instance.p2p_port << "\n";
    } else {
       cfg << "bnet-endpoint = " << host->listen_addr << ":" << instance.p2p_port << "\n";
-      // Include the net_plugin endpoint, because the plugin is always loaded (even if not used).
+      // Include the p2p_net_plugin endpoint, because the plugin is always loaded (even if not used).
       cfg << "p2p-listen-endpoint = " << host->listen_addr << ":" << instance.p2p_port + 1000 << "\n";
    }
 
@@ -1060,14 +1060,14 @@ launcher_def::write_config_file (tn_node_def &node) {
 
   if(!is_bios) {
      auto &bios_node = network.nodes["bios"];
-     if (p2p == p2p_plugin::NET) {
+     if (p2p == bp2p_plugin::NET) {
         cfg << "p2p-peer-address = " << bios_node.instance->p2p_endpoint<< "\n";
      } else {
         cfg << "bnet-connect = " << bios_node.instance->p2p_endpoint<< "\n";
      }
   }
   for (const auto &p : node.peers) {
-     if (p2p == p2p_plugin::NET) {
+     if (p2p == bp2p_plugin::NET) {
         cfg << "p2p-peer-address = " << network.nodes.find(p)->second.instance->p2p_endpoint << "\n";
      } else {
         cfg << "bnet-connect = " << network.nodes.find(p)->second.instance->p2p_endpoint << "\n";
@@ -1086,12 +1086,12 @@ launcher_def::write_config_file (tn_node_def &node) {
   if( instance.has_db ) {
     cfg << "plugin = datxio::mongo_db_plugin\n";
   }
-  if ( p2p == p2p_plugin::NET ) {
-    cfg << "plugin = datxio::net_plugin\n";
+  if ( p2p == bp2p_plugin::NET ) {
+    cfg << "plugin = datxio::p2p_net_plugin\n";
   } else {
-    cfg << "plugin = datxio::bnet_plugin\n";
+    cfg << "plugin = datxio::bp2p_plugin\n";
   }
-  cfg << "plugin = datxio::chain_api_plugin\n"
+  cfg << "plugin = datxio::core_api_plugin\n"
       << "plugin = datxio::history_api_plugin\n";
   cfg.close();
 }
@@ -1123,7 +1123,7 @@ launcher_def::write_logging_config_file(tn_node_def &node) {
                   ( "host", instance.name )
              ) );
     log_config.loggers.front().appenders.push_back("net");
-    fc::logger_config p2p ("net_plugin_impl");
+    fc::logger_config p2p ("p2p_net_plugin_impl");
     p2p.level=fc::log_level::debug;
     p2p.appenders.push_back ("stderr");
     p2p.appenders.push_back ("net");

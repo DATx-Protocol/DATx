@@ -9,79 +9,118 @@ import (
 	"time"
 )
 
-type Extract struct {
-	Pos int32
-
-	Offset int32
-
-	LatestBlockNum int64
-
-	taskClose chan bool
+//ExpirationTable
+type ExpirationTable struct {
+	Rows []struct {
+		ID        int    `json:"id"`
+		Trxid     string `json:"trxid"`
+		Producer  string `json:"producer"`
+		Timestamp int    `json:"timestamp"`
+		Category  string `json:"category"`
+	} `json:"rows"`
+	More bool `json:"more"`
 }
 
-func NewExtract() *Extract {
+type ExtractArgs struct {
+	Trxid    string `json:"trxid"`
+	Producer string `json:"producer"`
+	Category string `json:"category"`
+}
+
+type ExpiredArgs struct {
+	Trxid     string `json:"trxid"`
+	Category  string `json:"category"`
+	Handler   string `json:"handler"`
+	Timestamp string `json:"time"`
+}
+
+//Extract
+type Extract struct {
+	pos int32
+
+	offset int32
+
+	taskClose chan bool
+
+	producerName string
+}
+
+func NewExtract(name string) *Extract {
 	return &Extract{
-		Pos:            0,
-		Offset:         10,
-		LatestBlockNum: 0,
-		taskClose:      make(chan bool),
+		pos:          0,
+		offset:       10,
+		taskClose:    make(chan bool),
+		producerName: name,
 	}
 }
 
+//Startup
 func (ext *Extract) Startup() {
-	ext.getPosAndOffset()
-
 	go ext.taskLoop()
 }
 
+//Close
 func (ext *Extract) Close() {
 	ext.taskClose <- true
 }
 
-func (ext *Extract) getPosAndOffset() error {
-	_, err := GetOuterTrxTable("datxio", "datxio", "status")
-	if err != nil {
-		return err
-	}
+func (ext *Extract) getExpiredTrxs() ([]chainlib.Transaction, error) {
+	//get expired trx from extract smart contract table
+	raw, err := GetOuterTrxTable("user", "user", "expiration")
 
-	return nil
-}
-
-func (ext *Extract) GetAllTransactions() ([]chainlib.Transaction, error) {
-	err := ext.getPosAndOffset()
+	var temp ExpirationTable
+	err = json.Unmarshal(raw, &temp)
 	if err != nil {
-		return nil, fmt.Errorf("GetAllTransactions failed: %v\n", err)
+		return nil, err
 	}
 
 	var result []chainlib.Transaction
+	for _, v := range temp.Rows {
+		var item chainlib.Transaction
+		item.TransactionID = v.Trxid
+		item.Category = v.Category
+
+		result = append(result, item)
+	}
+
+	return result, nil
+}
+
+func (ext *Extract) getAllTransactions() ([]chainlib.Transaction, error) {
+	var result []chainlib.Transaction
 
 	//dbtc
-	btcTrxs, err := GetExtractActions("datxio.dbtc", ext.Pos, ext.Offset)
+	btcTrxs, err := GetExtractActions("datxio.dbtc", ext.pos, ext.offset)
 	if err != nil {
 		return nil, err
 	}
 	result = append(result, btcTrxs...)
 
 	//deth
-	ethTrxs, err := GetExtractActions("datxio.deth", ext.Pos, ext.Offset)
+	ethTrxs, err := GetExtractActions("datxio.deth", ext.pos, ext.offset)
 	if err != nil {
 		return nil, err
 	}
 	result = append(result, ethTrxs...)
 
 	//deos
-	eosTrxs, err := GetExtractActions("datxio.deos", ext.Pos, ext.Offset)
+	eosTrxs, err := GetExtractActions("datxio.deos", ext.pos, ext.offset)
 	if err != nil {
 		return nil, err
 	}
 	result = append(result, eosTrxs...)
+	ext.pos = ext.pos + ext.offset
 
-	ext.Pos = ext.Pos + ext.Offset
+	expire, err := ext.getExpiredTrxs()
+	if err == nil {
+		result = append(result, expire...)
+	}
+
 	return result, nil
 }
 
 //PushTrxToQueue push unirreversible trx to queue
-func (ext *Extract) PushTrxToQueue(trx chainlib.Transaction) {
+func (ext *Extract) pushTrxToQueue(trx chainlib.Transaction) {
 	var job delayqueue.Job
 	job.Topic = trx.Category
 	job.Id = trx.Category + "_" + trx.TransactionID
@@ -102,16 +141,22 @@ func (ext *Extract) PushTrxToQueue(trx chainlib.Transaction) {
 }
 
 //PushExtractAction push trx to contract that check the trx is sended already
-func (ext *Extract) PushExtractAction(trx chainlib.Transaction) error {
+func (ext *Extract) pushExtractAction(trx chainlib.Transaction) error {
 	//
-	bytes, err := json.Marshal(trx)
+	args := ExtractArgs{
+		Trxid:    trx.TransactionID,
+		Producer: ext.producerName,
+		Category: trx.Category,
+	}
+
+	bytes, err := json.Marshal(args)
 	if err != nil {
 		log.Printf("PushExtractAction marshal failed:%v %v\n", trx, err)
 		return err
 	}
-	_, err = chainlib.ClPushAction("contract_account", "check", string(bytes))
+	_, err = chainlib.ClPushAction("datx.extract", "recordtrx", string(bytes), "datxio")
 	if err != nil {
-		log.Printf("Extract push check failed:%v %v\n", trx, err)
+		log.Printf("Extract push recordtrx failed:%v %v\n", trx, err)
 		return err
 	}
 
@@ -125,40 +170,23 @@ func (ext *Extract) PushExtractAction(trx chainlib.Transaction) error {
 		case "EOS":
 			return EOSMultiSig(trx)
 		default:
-			return "", fmt.Errorf("PushExtractAction category %v not defined\n", trx.Category)
+			return "", fmt.Errorf("PushExtractAction category %v not defined", trx.Category)
 		}
 	}(trx)
 
-	//multisig failed,rollback
+	//multisig failed
 	if err != nil {
 		log.Printf("MultiSig failed trxID:%v %v\n", trxID, err)
-		return err
+		// return err
 	}
 
 	//extract success
-	log.Printf("MultiSig success trxID:%v\n", trxID)
-
 	jobid := trx.Category + "_" + trx.TransactionID
 
-	log.Printf("PushExtractAction success delete job id=%v %v\n", jobid, time.Now().Unix())
+	log.Printf("PushExtractAction success and delete job id=%v %v\n", jobid, time.Now().Unix())
 	delayqueue.Remove(jobid)
 
 	return nil
-}
-
-func (ext *Extract) ExecExtract() {
-	trxlist, err := ext.GetAllTransactions()
-	if err != nil {
-		return
-	}
-
-	for _, v := range trxlist {
-		if v.IsIrrevisible {
-			go ext.PushExtractAction(v)
-		} else {
-			ext.PushTrxToQueue(v)
-		}
-	}
 }
 
 func (ext *Extract) taskLoop() {
@@ -181,16 +209,31 @@ func (ext *Extract) taskLoop() {
 					break
 				}
 
-				fmt.Printf("Extract delay coming: %v\n", trx)
 				irreversible := CheckIrreversible(trx)
 				if irreversible {
-					go ext.PushExtractAction(trx)
+					go ext.pushExtractAction(trx)
 				} else {
-					ext.PushTrxToQueue(trx)
+					ext.pushTrxToQueue(trx)
 				}
 				fmt.Printf("Extract finished: %v\n", trx)
 			}
 		}
 	}
 
+}
+
+//ExecExtract
+func (ext *Extract) ExecExtract() {
+	trxlist, err := ext.getAllTransactions()
+	if err != nil || len(trxlist) == 0 {
+		return
+	}
+
+	for _, v := range trxlist {
+		if v.IsIrrevisible {
+			go ext.pushExtractAction(v)
+		} else {
+			ext.pushTrxToQueue(v)
+		}
+	}
 }

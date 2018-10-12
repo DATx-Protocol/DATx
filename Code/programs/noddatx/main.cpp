@@ -4,10 +4,10 @@
  */
 #include <appbase/application.hpp>
 
-#include <datxio/chain_plugin/chain_plugin.hpp>
+#include <datxio/core_plugin/core_plugin.hpp>
 #include <datxio/http_plugin/http_plugin.hpp>
 #include <datxio/history_plugin/history_plugin.hpp>
-#include <datxio/net_plugin/net_plugin.hpp>
+#include <datxio/p2p_net_plugin/p2p_net_plugin.hpp>
 #include <datxio/producer_plugin/producer_plugin.hpp>
 #include <datxio/utilities/common.hpp>
 
@@ -99,7 +99,7 @@ int main(int argc, char** argv)
       auto root = fc::app_path();
       app().set_default_data_dir(root / "datxio/noddatx/data" );
       app().set_default_config_dir(root / "datxio/noddatx/config" );
-      if(!app().initialize<chain_plugin, http_plugin, net_plugin, producer_plugin>(argc, argv))
+      if(!app().initialize<core_plugin, http_plugin, p2p_net_plugin, producer_plugin>(argc, argv))
          return INITIALIZE_FAIL;
       initialize_logging();
       //ilog("noddatx version ${ver}", ("ver", app().version_string()));

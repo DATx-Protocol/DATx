@@ -1380,7 +1380,7 @@ void mongo_db_plugin::plugin_initialize(const variables_map& options)
          if( options.count( "abi-serializer-max-time-ms") == 0 ) {
             DATX_ASSERT(false, chain::plugin_config_exception, "--abi-serializer-max-time-ms required as default value not appropriate for parsing full blocks");
          }
-         my->abi_serializer_max_time = app().get_plugin<chain_plugin>().get_abi_serializer_max_time();
+         my->abi_serializer_max_time = app().get_plugin<core_plugin>().get_abi_serializer_max_time();
 
          if( options.count( "mongodb-queue-size" )) {
             my->max_queue_size = options.at( "mongodb-queue-size" ).as<uint32_t>();
@@ -1452,8 +1452,8 @@ void mongo_db_plugin::plugin_initialize(const variables_map& options)
          my->mongo_conn = mongocxx::client{uri};
 
          // hook up to signals on controller
-         chain_plugin* chain_plug = app().find_plugin<chain_plugin>();
-         DATX_ASSERT( chain_plug, chain::missing_chain_plugin_exception, ""  );
+         core_plugin* chain_plug = app().find_plugin<core_plugin>();
+         DATX_ASSERT( chain_plug, chain::missing_core_plugin_exception, ""  );
          auto& chain = chain_plug->chain();
          my->chain_id.emplace( chain.get_chain_id());
 

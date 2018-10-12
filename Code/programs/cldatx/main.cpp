@@ -12,7 +12,7 @@
   @section intro Introduction to cldatx
 
   `cldatx` is a command line tool that interfaces with the REST api exposed by @ref noddatx. In order to use `cldatx` you will need to
-  have a local copy of `noddatx` running and configured to load the 'datxio::chain_api_plugin'.
+  have a local copy of `noddatx` running and configured to load the 'datxio::core_api_plugin'.
 
    cldatx contains documentation for all of its commands. For a list of all commands known to cldatx, simply run it with no arguments:
 ```
@@ -89,7 +89,7 @@ Options:
 #include <datxio/chain/config.hpp>
 #include <datxio/chain/wast_to_wasm.hpp>
 #include <datxio/chain/trace.hpp>
-#include <datxio/chain_plugin/chain_plugin.hpp>
+#include <datxio/core_plugin/core_plugin.hpp>
 #include <datxio/chain/contract_types.hpp>
 
 #pragma push_macro("N")
@@ -525,11 +525,12 @@ chain::action create_delegate(const name& from, const name& receiver, const asse
                         config::system_account_name, N(delegatebw), act_payload);
 }
 
-fc::variant regproducer_variant(const account_name& producer, const public_key_type& key, const string& url, uint16_t location) {
+fc::variant regproducer_variant(const account_name& producer, const public_key_type& key, const string& url, const string& url_verifier,uint16_t location) {
    return fc::mutable_variant_object()
             ("producer", producer)
             ("producer_key", key)
             ("url", url)
+            ("url_verifier", url_verifier)
             ("location", location)
             ;
 }
@@ -831,6 +832,7 @@ struct register_producer_subcommand {
    string producer_str;
    string producer_key_str;
    string url;
+   string url_verifier;
    uint16_t loc = 0;
 
    register_producer_subcommand(CLI::App* actionRoot) {
@@ -838,6 +840,7 @@ struct register_producer_subcommand {
       register_producer->add_option("account", producer_str, localized("The account to register as a producer"))->required();
       register_producer->add_option("producer_key", producer_key_str, localized("The producer's public key"))->required();
       register_producer->add_option("url", url, localized("url where info about producer can be found"), true);
+      register_producer->add_option("url_verifier", url_verifier, localized("url where info about producer can be found"), true);
       register_producer->add_option("location", loc, localized("relative location for purpose of nearest neighbor scheduling"), true);
       add_standard_transaction_options(register_producer);
 
@@ -848,7 +851,7 @@ struct register_producer_subcommand {
             producer_key = public_key_type(producer_key_str);
          } DATX_RETHROW_EXCEPTIONS(public_key_type_exception, "Invalid producer public key: ${public_key}", ("public_key", producer_key_str))
 
-         auto regprod_var = regproducer_variant(producer_str, producer_key, url, loc );
+         auto regprod_var = regproducer_variant(producer_str, producer_key, url, url_verifier,loc );
          send_actions({create_action({permission_level{producer_str,config::active_name}}, config::system_account_name, N(regproducer), regprod_var)});
       });
    }
@@ -1909,7 +1912,7 @@ int main( int argc, char** argv ) {
          if(abi_serializer::to_abi(abi_v, abi_d))
             abi = fc::json::to_pretty_string(abi_d);
       }
-      catch(chain::missing_chain_api_plugin_exception&) {
+      catch(chain::missing_core_api_plugin_exception&) {
          //see if this is an old noddatx that doesn't support get_raw_code_and_abi
          const auto old_result = call(get_code_func, fc::mutable_variant_object("account_name", accountName)("code_as_wasm",code_as_wasm));
          code_hash = old_result["code_hash"].as_string();
@@ -2961,6 +2964,7 @@ int main( int argc, char** argv ) {
    system->require_subcommand();
 
    auto createAccountSystem = create_account_subcommand( system, false /*simple*/ );
+  
    auto registerProducer = register_producer_subcommand(system);
    auto unregisterProducer = unregister_producer_subcommand(system);
 

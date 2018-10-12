@@ -5,7 +5,7 @@
 
 #pragma once
 #include <datxio/history_plugin/history_plugin.hpp>
-#include <datxio/chain_plugin/chain_plugin.hpp>
+#include <datxio/core_plugin/core_plugin.hpp>
 #include <datxio/http_plugin/http_plugin.hpp>
 
 #include <appbase/application.hpp>
@@ -16,7 +16,7 @@ namespace datxio {
 
    class history_api_plugin : public plugin<history_api_plugin> {
       public:
-        APPBASE_PLUGIN_REQUIRES((history_plugin)(chain_plugin)(http_plugin))
+        APPBASE_PLUGIN_REQUIRES((history_plugin)(core_plugin)(http_plugin))
 
         history_api_plugin();
         virtual ~history_api_plugin();

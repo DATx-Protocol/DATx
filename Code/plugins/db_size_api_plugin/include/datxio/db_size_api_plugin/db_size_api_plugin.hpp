@@ -5,7 +5,7 @@
 #pragma once
 
 #include <datxio/http_plugin/http_plugin.hpp>
-#include <datxio/chain_plugin/chain_plugin.hpp>
+#include <datxio/core_plugin/core_plugin.hpp>
 
 #include <appbase/application.hpp>
 
@@ -27,7 +27,7 @@ struct db_size_stats {
 
 class db_size_api_plugin : public plugin<db_size_api_plugin> {
 public:
-   APPBASE_PLUGIN_REQUIRES((http_plugin) (chain_plugin))
+   APPBASE_PLUGIN_REQUIRES((http_plugin) (core_plugin))
 
    db_size_api_plugin() = default;
    db_size_api_plugin(const db_size_api_plugin&) = delete;

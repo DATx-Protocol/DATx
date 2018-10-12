@@ -3,7 +3,7 @@
 #include <datxio/history_plugin/public_key_history_object.hpp>
 #include <datxio/chain/controller.hpp>
 #include <datxio/chain/trace.hpp>
-#include <datxio/chain_plugin/chain_plugin.hpp>
+#include <datxio/core_plugin/core_plugin.hpp>
 
 #include <fc/io/json.hpp>
 
@@ -140,7 +140,7 @@ namespace datxio {
          bool bypass_filter = false;
          std::set<filter_entry> filter_on;
          std::set<filter_entry> filter_out;
-         chain_plugin*          chain_plug = nullptr;
+         core_plugin*          chain_plug = nullptr;
          fc::optional<scoped_connection> applied_transaction_connection;
 
           bool filter(const action_trace& act) {
@@ -340,8 +340,8 @@ namespace datxio {
             }
          }
 
-         my->chain_plug = app().find_plugin<chain_plugin>();
-         DATX_ASSERT( my->chain_plug, chain::missing_chain_plugin_exception, ""  );
+         my->chain_plug = app().find_plugin<core_plugin>();
+         DATX_ASSERT( my->chain_plug, chain::missing_core_plugin_exception, ""  );
          auto& chain = my->chain_plug->chain();
 
          chain.db().add_index<account_history_index>();

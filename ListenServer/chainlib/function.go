@@ -58,6 +58,7 @@ type TransferInfo struct {
 
 //ChargeInfo ...
 type ChargeInfo struct {
+	BPName   string `json:"bpname"`
 	Hash     string `json:"hash"`
 	From     string `json:"from"`
 	To       string `json:"to"`
@@ -65,6 +66,12 @@ type ChargeInfo struct {
 	Quantity string `json:"quantity"`
 	Category string `json:"category"`
 	Memo     string `json:"memo"`
+}
+
+//ExtractInfo info
+type ExtractInfo struct {
+	TrxID    string `json:"trxid"`
+	Producer string `json:"producer"`
 }
 
 // RandomSha256 ...
@@ -98,7 +105,7 @@ func ExecShell(command string) (string, error) {
 	outStr := string(stdout.Bytes())
 	errStr := string(stderr.Bytes())
 	if err != nil {
-		return errStr, fmt.Errorf("Bash command error: %v\n", errStr)
+		return errStr, fmt.Errorf("Execute command error: %v\n", errStr)
 	}
 	return outStr, nil
 }
@@ -110,11 +117,20 @@ func ClWalletUnlock(password string) (string, error) {
 }
 
 // ClPushAction ...
-func ClPushAction(account string, action string, data string) (string, error) {
+func ClPushAction(account, action, data, permission string) (string, error) {
 	//Ensure that your wallet is unlocked before using it!
-	command := "cldatx push action " + account + " " + action + " " + data + " -j " + " -f " + " -p " + account
-	fmt.Println(command)
-	return ExecShell(command)
+	// unlockwallet := fmt.Sprintf("cldatx wallet unlock --password %s", "PW5KYDG5GHavJUr28xHQ84km6M3czUaRh4HNJWxDa3drDZcpWF5cD")
+	// _, err := ExecShell(unlockwallet)
+	// str := err.Error()
+
+	// if !strings.Contains(str, "Already unlocked") {
+	// 	fmt.Printf("unlock wallet err: %v\n", err)
+	// 	return "", err
+	// }
+
+	actionstr := fmt.Sprintf("cldatx push action %s %s '%s' -j -f -p %s", account, action, data, permission)
+	fmt.Println(actionstr)
+	return ExecShell(actionstr)
 }
 
 // ClPushTransfer ...
@@ -123,7 +139,7 @@ func ClPushTransfer(account string, action string, trans TransferInfo) (string, 
 	//Ensure that your wallet is unlocked before using it!
 	js, _ := json.Marshal(trans)
 	transStr := "'" + string(js) + "'"
-	outStr, err := ClPushAction(account, action, transStr)
+	outStr, err := ClPushAction(account, action, transStr, account)
 	if err != nil {
 		return "", err
 	}
@@ -140,7 +156,7 @@ func ClPushCharge(account string, action string, charge ChargeInfo) (string, err
 	//Ensure that your wallet is unlocked before using it!
 	js, _ := json.Marshal(charge)
 	chargeStr := "'" + string(js) + "'"
-	outStr, err := ClPushAction(account, action, chargeStr)
+	outStr, err := ClPushAction(account, action, chargeStr, charge.BPName)
 	if err != nil {
 		return "", err
 	}

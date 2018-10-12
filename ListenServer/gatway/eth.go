@@ -327,7 +327,7 @@ func (eth *ETHBrowser) Tick() {
 	fmt.Printf("get blocknum from ontick: %v\n", eth.handleHeight)
 	trxs, err := eth.GetTrxs(eth.tickAddress, eth.handleHeight, 99999999)
 	if err != nil {
-		fmt.Printf("Get trxs on tick err: %v\n", err)
+		fmt.Printf("ETH Get trxs on tick err: %v\n", err)
 		return
 	}
 
@@ -338,45 +338,19 @@ func (eth *ETHBrowser) Tick() {
 
 			if eth.handleHeight < trx.BlockNum {
 				eth.handleHeight = trx.BlockNum
-				fmt.Printf("trx irreversible from: %v  %v\n", trx.TransactionID, eth.handleHeight)
+				fmt.Printf("ETH trx irreversible from: %v  %v\n", trx.TransactionID, eth.handleHeight)
 			}
 
-			var charge chainlib.ChargeInfo
-			charge.Hash = trx.TransactionID
-			charge.From = trx.From
-			charge.To = trx.To
-			charge.BlockNum = trx.BlockNum
-			charge.Quantity = strconv.FormatFloat(trx.Amount, 'f', 4, 64)
-			charge.Category = trx.Category
-			charge.Memo = trx.Memo
+			eth.pushCharge(trx)
 
-			// 需要钱包密码
-			_, err := chainlib.ClWalletUnlock("PW5JHPpaGrS7bKhmQJ5Rb7rNSXhp3S3sXN2fGWaqQNzQufQaWrkUJ")
-			// 需要合约权限
-			chargeID, err := chainlib.ClPushCharge("datxio.charg", "charge", charge)
-			if err != nil {
-				fmt.Printf("ETH push charge err:", err)
-				continue
-			}
-			blockNum, err := chainlib.ClGetTrxBlockNum(chargeID)
-			if err != nil {
-				fmt.Printf("blockNum parse err:", err)
-				continue
-			}
-
-			trans := trx
-			trans.TransactionID = chargeID
-			trans.BlockNum = blockNum
-			trans.To = "lmx"    // 需要地址映射和权限
-			eth.tick.AddHash(trans)
 		} else {
 			jobid := trx.Category + "_" + trx.TransactionID
 			if job, _ := delayqueue.Get(jobid); job != nil {
-				fmt.Printf("tick trx is existed: %v %v\n", trx.TransactionID, time.Now().Unix())
+				fmt.Printf("ETH tick trx is existed: %v %v\n", trx.TransactionID, time.Now().Unix())
 				continue
 			}
 
-			fmt.Printf("Add eth task on tick: %v  %v\n", trx.TransactionID, time.Now().Unix())
+			fmt.Printf("ETH Add eth task on tick: %v  %v\n", trx.TransactionID, time.Now().Unix())
 			eth.tick.AddTask(trx, ETHDelaySeconds)
 		}
 	}
@@ -385,17 +359,40 @@ func (eth *ETHBrowser) Tick() {
 func (eth *ETHBrowser) ReTry(trx chainlib.Transaction) bool {
 	blockNum := trx.BlockNum
 
-	fmt.Printf("ReTry eth on tick: %v  %v\n", trx.TransactionID, time.Now().Unix())
+	fmt.Printf("ETH ReTry eth on tick: %v  %v\n", trx.TransactionID, time.Now().Unix())
 
 	sta, err := eth.Irreversible(blockNum)
 	if err != nil || !sta {
-		eth.tick.AddTask(trx, ETHDelaySeconds/2)
+		eth.tick.AddTask(trx, ETHDelaySeconds)
 		return false
 	}
+
+	eth.pushCharge(trx)
 
 	return sta
 }
 
 func (eth *ETHBrowser) Close() {
 	eth.close <- true
+}
+
+//pushCharge push charge action to blockchain
+func (eth *ETHBrowser) pushCharge(trx chainlib.Transaction) error {
+	var charge chainlib.ChargeInfo
+	charge.BPName = chainlib.GetCfgProducerName()
+	charge.Hash = trx.TransactionID
+	charge.From = trx.From
+	charge.To = trx.To
+	charge.BlockNum = trx.BlockNum
+	charge.Quantity = strconv.FormatFloat(trx.Amount, 'f', 4, 64)
+	charge.Category = trx.Category
+	charge.Memo = trx.Memo
+
+	_, err := chainlib.ClPushCharge("datxio.charg", "charge", charge)
+	if err != nil {
+		fmt.Printf("ETH push charge err: %v\n:", err)
+		return err
+	}
+
+	return nil
 }

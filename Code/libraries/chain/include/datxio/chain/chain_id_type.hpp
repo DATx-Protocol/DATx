@@ -10,7 +10,7 @@ struct hello;
 
 namespace datxio {
 
-   class net_plugin_impl;
+   class p2p_net_plugin_impl;
    struct handshake_message;
 
    namespace chain_apis {
@@ -45,10 +45,10 @@ namespace chain {
 
          friend class datxio::chain_apis::read_only;
 
-         friend class datxio::net_plugin_impl;
+         friend class datxio::p2p_net_plugin_impl;
          friend struct datxio::handshake_message;
 
-         friend struct ::hello; // TODO: Rushed hack to support bnet_plugin. Need a better solution.
+         friend struct ::hello; // TODO: Rushed hack to support bp2p_plugin. Need a better solution.
    };
 
 } }  // namespace datxio::chain

@@ -40,7 +40,7 @@ namespace datxiosystem {
     *  @pre authority of producer to register
     *
     */
-   void system_contract::regproducer( const account_name producer, const datxio::public_key& producer_key, const std::string& url, uint16_t location ) {
+   void system_contract::regproducer( const account_name producer, const datxio::public_key& producer_key, const std::string& url,const std::string& url_verifier, uint16_t location ) {
       datxio_assert( url.size() < 512, "url too long" );
       datxio_assert( producer_key != datxio::public_key(), "public key should not be the default value" );
       require_auth( producer );
@@ -71,7 +71,7 @@ namespace datxiosystem {
          _verifiers.modify( veri, producer, [&]( verifier_info& info ){
                info.verifier_key = producer_key;
                info.is_active    = true;
-               info.url          = url;
+               info.url          = url_verifier;
                info.location     = location;
             });
       } else {
@@ -80,7 +80,7 @@ namespace datxiosystem {
                info.total_votes   = 0;
                info.verifier_key  = producer_key;
                info.is_active     = true;
-               info.url           = url;
+               info.url           = url_verifier;
                info.location      = location;
          });
       } 

@@ -39,9 +39,9 @@ func GetOuterTrxTable(code, scope, table string) ([]byte, error) {
 		Scope: scope,
 		Table: table,
 		JSON:  "true",
-		Lower: 1,
-		Upper: -1,
-		Limit: 10,
+		// Lower: 1,
+		// Upper: -1,
+		// Limit: 10,
 	}
 	req, err := json.Marshal(reqpara)
 	if err != nil {
@@ -70,7 +70,6 @@ func GetOuterTrxTable(code, scope, table string) ([]byte, error) {
 	}
 
 	return body, nil
-
 }
 
 func GetProducerSchedule() ([]Producers, error) {
@@ -153,7 +152,7 @@ func GetInfo() (*ChainInfo, error) {
 }
 
 func IsCurrentProducer() bool {
-	localProducerName := GetCfgProducerName()
+	localProducerName := chainlib.GetCfgProducerName()
 
 	info, err := GetInfo()
 	if err != nil {
@@ -162,6 +161,13 @@ func IsCurrentProducer() bool {
 	}
 
 	headProducerName := info.HeadBlockProducer
+
+	// commondstr := fmt.Sprint("cldatx system listproducers -l 21")
+	// _, err := chainlib.ExecShell(commondstr)
+	// if err != nil {
+	// 	return false
+	// }
+
 	if localProducerName == headProducerName {
 		return true
 	}
@@ -169,6 +175,7 @@ func IsCurrentProducer() bool {
 	return false
 }
 
+//GetExtractActions get transaction by escrow account(*dbtc,deth,deos) when extracting
 func GetExtractActions(addr string, pos, offset int32) ([]chainlib.Transaction, error) {
 	reqpara := ActionsParams{
 		AccountName: addr,
@@ -247,6 +254,47 @@ func GetExtractActions(addr string, pos, offset int32) ([]chainlib.Transaction, 
 	}
 
 	return result, nil
+}
+
+func GetExtractTransaction(trxid string) (*chainlib.Transaction, error) {
+	reqpara := struct {
+		ID string
+	}{
+		ID: trxid,
+	}
+	req, err := json.Marshal(reqpara)
+	if err != nil {
+		return nil, err
+	}
+
+	para := bytes.NewBuffer([]byte(req))
+	request, err := http.NewRequest("POST", "http://127.0.0.1:8888/v1/history/get_transaction", para)
+	if err != nil {
+		return nil, err
+	}
+	request.Header.Set("Content-type", "application/json")
+
+	client := &http.Client{}
+	response, errr := client.Do(request)
+	if errr != nil {
+		return nil, err
+	}
+	if response.StatusCode != 200 {
+		return nil, fmt.Errorf("get_transaction Response error: %v\n", response.Status)
+	}
+
+	body, err := ioutil.ReadAll(response.Body)
+	if err != nil {
+		return nil, err
+	}
+
+	var result chainlib.Transaction
+	err = json.Unmarshal(body, &result)
+	if err != nil {
+		return nil, err
+	}
+
+	return &result, nil
 }
 
 func CheckIrreversible(trx chainlib.Transaction) bool {

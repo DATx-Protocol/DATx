@@ -2,8 +2,8 @@
  *  @file
  *  @copyright defined in datx/LICENSE.txt
  */
-#include <datxio/faucet_testnet_plugin/faucet_testnet_plugin.hpp>
-#include <datxio/chain_plugin/chain_plugin.hpp>
+#include <datxio/faucet_testp2p_net_plugin/faucet_testp2p_net_plugin.hpp>
+#include <datxio/core_plugin/core_plugin.hpp>
 #include <datxio/utilities/key_conversion.hpp>
 
 #include <fc/variant.hpp>
@@ -48,7 +48,7 @@ FC_REFLECT(datxio::detail::faucet_testnet_create_account_rate_limited_response, 
 
 namespace datxio {
 
-static appbase::abstract_plugin& _faucet_testnet_plugin = app().register_plugin<faucet_testnet_plugin>();
+static appbase::abstract_plugin& _faucet_testp2p_net_plugin = app().register_plugin<faucet_testp2p_net_plugin>();
 
 using namespace datxio::chain;
 using public_key_type = chain::public_key_type;
@@ -67,12 +67,12 @@ using results_pair = std::pair<uint32_t,fc::variant>;
           } \
        }}
 
-struct faucet_testnet_plugin_impl {
+struct faucet_testp2p_net_plugin_impl {
    struct create_faucet_account_alternate_results {
       std::vector<std::string> alternates;
    };
 
-   faucet_testnet_plugin_impl(appbase::application& app)
+   faucet_testp2p_net_plugin_impl(appbase::application& app)
    : _app(app)
    , _timer{app.get_io_service()}
    {
@@ -213,7 +213,7 @@ struct faucet_testnet_plugin_impl {
       }
 
       chain::chain_id_type chainid;
-      auto& plugin = _app.get_plugin<chain_plugin>();
+      auto& plugin = _app.get_plugin<core_plugin>();
       plugin.get_chain_id(chainid);
       controller& cc = plugin.chain();
 
@@ -241,7 +241,7 @@ struct faucet_testnet_plugin_impl {
 
       _blocking_accounts = true;
       _timer.expires_from_now(boost::posix_time::microseconds(_create_interval_msec * 1000));
-      _timer.async_wait(boost::bind(&faucet_testnet_plugin_impl::timer_fired, this));
+      _timer.async_wait(boost::bind(&faucet_testp2p_net_plugin_impl::timer_fired, this));
 
       return std::make_pair(account_created, fc::variant(datxio::detail::faucet_testnet_empty()));
    }
@@ -254,7 +254,7 @@ struct faucet_testnet_plugin_impl {
    const chainbase::database& database() {
       static const chainbase::database* db = nullptr;
       if (db == nullptr)
-         db = &_app.get_plugin<chain_plugin>().chain().db();
+         db = &_app.get_plugin<core_plugin>().chain().db();
 
       return *db;
    }
@@ -273,32 +273,32 @@ struct faucet_testnet_plugin_impl {
    public_key_type _create_account_public_key;
 };
 
-const uint32_t faucet_testnet_plugin_impl::_default_create_interval_msec = 1000;
-const uint32_t faucet_testnet_plugin_impl::_default_create_alternates_to_return = 3;
-const std::string faucet_testnet_plugin_impl::_default_create_account_name = "faucet";
+const uint32_t faucet_testp2p_net_plugin_impl::_default_create_interval_msec = 1000;
+const uint32_t faucet_testp2p_net_plugin_impl::_default_create_alternates_to_return = 3;
+const std::string faucet_testp2p_net_plugin_impl::_default_create_account_name = "faucet";
 // defaults to the public/private key of init accounts in private testnet genesis.json
-const key_pair faucet_testnet_plugin_impl::_default_key_pair = {"DATX6MRyAjQq8ud7hVNYcfnVPJqcVpscN5So8BhtHuGYqET5GDW5CV", "5KQwrPbwdL6PhXujxW37FSSQZ1JiwsST4cqQzDeyXtP79zkvFD3"};
+const key_pair faucet_testp2p_net_plugin_impl::_default_key_pair = {"DATX6MRyAjQq8ud7hVNYcfnVPJqcVpscN5So8BhtHuGYqET5GDW5CV", "5KQwrPbwdL6PhXujxW37FSSQZ1JiwsST4cqQzDeyXtP79zkvFD3"};
 
 
-faucet_testnet_plugin::faucet_testnet_plugin()
-: my(new faucet_testnet_plugin_impl(app()))
+faucet_testp2p_net_plugin::faucet_testp2p_net_plugin()
+: my(new faucet_testp2p_net_plugin_impl(app()))
 {
 }
 
-faucet_testnet_plugin::~faucet_testnet_plugin() {}
+faucet_testp2p_net_plugin::~faucet_testp2p_net_plugin() {}
 
-void faucet_testnet_plugin::set_program_options(options_description&, options_description& cfg) {
+void faucet_testp2p_net_plugin::set_program_options(options_description&, options_description& cfg) {
    cfg.add_options()
-         ("faucet-create-interval-ms", bpo::value<uint32_t>()->default_value(faucet_testnet_plugin_impl::_default_create_interval_msec),
+         ("faucet-create-interval-ms", bpo::value<uint32_t>()->default_value(faucet_testp2p_net_plugin_impl::_default_create_interval_msec),
           "Time to wait, in milliseconds, between creating next faucet created account.")
-         ("faucet-name", bpo::value<std::string>()->default_value(faucet_testnet_plugin_impl::_default_create_account_name),
+         ("faucet-name", bpo::value<std::string>()->default_value(faucet_testp2p_net_plugin_impl::_default_create_account_name),
           "Name to use as creator for faucet created accounts.")
-         ("faucet-private-key", boost::program_options::value<std::string>()->default_value(fc::json::to_string(faucet_testnet_plugin_impl::_default_key_pair)),
+         ("faucet-private-key", boost::program_options::value<std::string>()->default_value(fc::json::to_string(faucet_testp2p_net_plugin_impl::_default_key_pair)),
           "[public key, WIF private key] for signing for faucet creator account")
          ;
 }
 
-void faucet_testnet_plugin::plugin_initialize(const variables_map& options) {
+void faucet_testp2p_net_plugin::plugin_initialize(const variables_map& options) {
    try {
       my->_create_interval_msec = options.at( "faucet-create-interval-ms" ).as<uint32_t>();
       my->_create_account_name = options.at( "faucet-name" ).as<std::string>();
@@ -311,13 +311,13 @@ void faucet_testnet_plugin::plugin_initialize(const variables_map& options) {
    } FC_LOG_AND_RETHROW()
 }
 
-void faucet_testnet_plugin::plugin_startup() {
+void faucet_testp2p_net_plugin::plugin_startup() {
    app().get_plugin<http_plugin>().add_api({
-      CALL(faucet, my, create_account, faucet_testnet_plugin_impl::create_faucet_account )
+      CALL(faucet, my, create_account, faucet_testp2p_net_plugin_impl::create_faucet_account )
    });
 }
 
-void faucet_testnet_plugin::plugin_shutdown() {
+void faucet_testp2p_net_plugin::plugin_shutdown() {
    try {
       my->_timer.cancel();
    } catch(fc::exception& e) {

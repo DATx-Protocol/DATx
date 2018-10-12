@@ -4,7 +4,7 @@
  */
 #pragma once
 
-#include <datxio/chain_plugin/chain_plugin.hpp>
+#include <datxio/core_plugin/core_plugin.hpp>
 #include <appbase/application.hpp>
 #include <memory>
 
@@ -29,7 +29,7 @@ using mongo_db_plugin_impl_ptr = std::shared_ptr<class mongo_db_plugin_impl>;
  */
 class mongo_db_plugin : public plugin<mongo_db_plugin> {
 public:
-   APPBASE_PLUGIN_REQUIRES((chain_plugin))
+   APPBASE_PLUGIN_REQUIRES((core_plugin))
 
    mongo_db_plugin();
    virtual ~mongo_db_plugin();

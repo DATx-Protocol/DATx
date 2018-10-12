@@ -76,7 +76,7 @@ if(BUILD_MONGO_DB_PLUGIN)
     )
 
   target_link_libraries(mongo_db_plugin
-          PUBLIC chain_plugin datxio_chain appbase
+          PUBLIC core_plugin datxio_chain appbase
           ${DATX_LIBMONGOCXX} ${DATX_LIBBSONCXX}
           )
 else()

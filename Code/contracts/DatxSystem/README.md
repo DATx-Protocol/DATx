@@ -1,5 +1,15 @@
 datxio.system
 ----------
+## datxio.system系统合约中，我们做了如下改动：  
+		（1）改变了质押内存计算方式，修改了DATX与RAM互换的计算方法  
+		（2）添加了验证节点的选拔方法  
+		（3）修改了DATX每年增发的计算方法  
+		（4）修改了原来的节点的奖励方式  
+		（5）添加了对验证节点的奖励  
+## 注意：
+		(1)在注册成为producer节点时，会拥有成为验证节点的资格，因此注册时需同时需输入作为producer的url和作为vefier的url。  
+			regproducer( producer_name, producer_public_key,url_producer,url_Verify, location )  
+		(2)除上一步外，其他调用接口保持原来的方式  
 
 This contract enables users to stake tokens, and then configure and vote on producers and worker proposals. 
 

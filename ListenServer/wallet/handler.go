@@ -1,11 +1,17 @@
 package main
 
 import (
+	"datx/ListenServer/chainlib"
 	"datx/ListenServer/explorer"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
 )
+
+// TrxResult ...
+type TrxResult struct {
+	Hash string `json:"hash"`
+}
 
 func jsonBindingError(ctx *gin.Context) {
 	ctx.JSON(400, gin.H{
@@ -60,5 +66,81 @@ func postWalletBalance(ctx *gin.Context) {
 		"code":    200,
 		"message": "OK",
 		"data":    walletValue,
+	})
+}
+
+func postWalletTrxList(ctx *gin.Context) {
+	var request explorer.WalletTrxRequest
+	err := ctx.BindJSON(&request)
+	if err != nil {
+		jsonBindingError(ctx)
+		return
+	}
+	trxList, err := explorer.GetWalletTrxList(request.Category, request.Address, request.Limit)
+	if err != nil {
+		explorerError(ctx, err)
+		return
+	}
+
+	ctx.JSON(http.StatusOK, gin.H{
+		"code":    200,
+		"message": "OK",
+		"data":    trxList,
+	})
+}
+
+func postDATXResource(ctx *gin.Context) {
+	var request explorer.DATXResourceRequest
+	err := ctx.BindJSON(&request)
+	if err != nil {
+		jsonBindingError(ctx)
+		return
+	}
+	trxList, err := explorer.GetDATXResource(request.Account)
+	if err != nil {
+		explorerError(ctx, err)
+		return
+	}
+
+	ctx.JSON(http.StatusOK, gin.H{
+		"code":    200,
+		"message": "OK",
+		"data":    trxList,
+	})
+}
+
+func postDATXSignup(ctx *gin.Context) {
+	var request explorer.SignupAccountRequest
+	err := ctx.BindJSON(&request)
+	if err != nil {
+		jsonBindingError(ctx)
+		return
+	}
+
+	trxList, err := explorer.GetSignupTrxList(request.SysAccount, 0, 1000)
+	if err != nil {
+		explorerError(ctx, err)
+		return
+	}
+	signupAcc, err := explorer.MatchSignupAccount(request, trxList)
+	if err != nil {
+		explorerError(ctx, err)
+		return
+	}
+	outStr, err := explorer.ClSystemNewaccount(signupAcc)
+	if err != nil {
+		explorerError(ctx, err)
+		return
+	}
+	trxID, err := chainlib.ParseTrxID(outStr)
+	if err != nil {
+		explorerError(ctx, err)
+		return
+	}
+
+	ctx.JSON(http.StatusOK, gin.H{
+		"code":    200,
+		"message": "OK",
+		"data":    TrxResult{trxID},
 	})
 }

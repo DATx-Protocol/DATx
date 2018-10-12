@@ -221,7 +221,7 @@ namespace datxiosystem {
 
          // functions defined in voting.cpp
 
-         void regproducer( const account_name producer, const public_key& producer_key, const std::string& url, uint16_t location );
+         void regproducer( const account_name producer, const public_key& producer_key, const std::string& url,const std::string& url_verifier, uint16_t location );
 
          void unregprod( const account_name producer );
 

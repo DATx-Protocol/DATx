@@ -3,7 +3,7 @@
  *  @copyright defined in datx/LICENSE.txt
  */
 #pragma once
-#include <datxio/chain_plugin/chain_plugin.hpp>
+#include <datxio/core_plugin/core_plugin.hpp>
 #include <datxio/http_plugin/http_plugin.hpp>
 
 #include <appbase/application.hpp>
@@ -13,7 +13,7 @@ namespace datxio {
 
 class login_plugin : public plugin<login_plugin> {
  public:
-   APPBASE_PLUGIN_REQUIRES((chain_plugin)(http_plugin))
+   APPBASE_PLUGIN_REQUIRES((core_plugin)(http_plugin))
 
    login_plugin();
    virtual ~login_plugin();

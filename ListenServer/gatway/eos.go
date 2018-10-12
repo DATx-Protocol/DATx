@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
+	"log"
 	"net/http"
 	"strconv"
 	"strings"
@@ -185,7 +186,7 @@ func NewEOSBrowser(account string, server *server.ChainServer) *EOSBrowser {
 func (eos *EOSBrowser) GetBlocks(blocknum int64) (*chainlib.Block, error) {
 	var allurl = eos.url + "blocks/" + string(blocknum)
 
-	fmt.Printf("GetBlocks request url is : %s\n", allurl)
+	// fmt.Printf("GetBlocks request url is : %s\n", allurl)
 
 	res, err := http.Get(allurl)
 	if err != nil {
@@ -195,7 +196,7 @@ func (eos *EOSBrowser) GetBlocks(blocknum int64) (*chainlib.Block, error) {
 	defer res.Body.Close()
 
 	if res.Status != "200 OK" {
-		return nil, fmt.Errorf("EOS GetBlocks:%v %v\n", allurl, res.Status)
+		return nil, fmt.Errorf("EOS GetBlocks:%v %v", allurl, res.Status)
 	}
 
 	body, err := ioutil.ReadAll(res.Body)
@@ -278,7 +279,7 @@ func (eos *EOSBrowser) GetAccountActions(accountAddr string) ([]chainlib.Transac
 	defer res.Body.Close()
 
 	if res.Status != "200 OK" {
-		return nil, fmt.Errorf("EOS GetAccountActions:%v %v\n", allurl, res.Status)
+		return nil, fmt.Errorf("EOS GetAccountActions:%v %v", allurl, res.Status)
 	}
 
 	body, err := ioutil.ReadAll(res.Body)
@@ -304,10 +305,6 @@ func (eos *EOSBrowser) GetAccountActions(accountAddr string) ([]chainlib.Transac
 			continue
 		}
 
-		if v.Data.To != accountAddr {
-			continue
-		}
-
 		eostrx, err := eos.GetTransaction(v.TrxID)
 		if err != nil {
 			fmt.Printf("GetAccountActions :%v %v", accountAddr, err)
@@ -323,6 +320,7 @@ func (eos *EOSBrowser) GetAccountActions(accountAddr string) ([]chainlib.Transac
 		amountpos := strings.Index(v.Data.Quantity, " ") // EOS的Quantity是金额+空格+币种
 		amountstr := v.Data.Quantity[:amountpos]         // 只需要空格前面的金额
 		temp.Amount, _ = strconv.ParseFloat(amountstr, 64)
+		temp.Memo = v.Data.Memo
 
 		temp.Time = time.Now()
 		temp.IsIrrevisible = eostrx.Irreversible
@@ -379,10 +377,12 @@ func (eos *EOSBrowser) IsIrreversible(trxid string) (bool, error) {
 	return block.Irreversible, nil
 }
 
+//SetTickAccountAddr set account
 func (eos *EOSBrowser) SetTickAccountAddr(account string) {
 	eos.tickAccount = account
 }
 
+//Tick execute per second
 func (eos *EOSBrowser) Tick() {
 	trxs, err := eos.GetAccountActions(eos.tickAccount)
 	if err != nil {
@@ -392,36 +392,14 @@ func (eos *EOSBrowser) Tick() {
 
 	for _, trx := range trxs {
 		if trx.IsIrrevisible {
-			fmt.Printf("eos trx is irreversible: %v\n", trx.TransactionID)
-			//exec push action
-			var charge chainlib.ChargeInfo
-			charge.Hash = trx.TransactionID
-			charge.From = trx.From
-			charge.To = trx.To
-			charge.BlockNum = trx.BlockNum
-			charge.Quantity = strconv.FormatFloat(trx.Amount, 'f', 4, 64)
-			charge.Category = trx.Category
-			charge.Memo = trx.Memo
-
-			// 需要钱包密码
-			_, err := chainlib.ClWalletUnlock("PW5JHPpaGrS7bKhmQJ5Rb7rNSXhp3S3sXN2fGWaqQNzQufQaWrkUJ")
-			// 需要合约权限
-			chargeID, err := chainlib.ClPushCharge("datxio.charg", "charge", charge)
-			if err != nil {
-				fmt.Printf("EOS push charge err:", err)
+			// fmt.Printf("eos trx is irreversible: %v\n", trx.TransactionID)
+			if trx.To == eos.tickAccount {
+				eos.pushCharge(trx)
+			} else if trx.From == eos.tickAccount {
+				eos.pushExtract(trx)
+			} else {
 				continue
 			}
-			blockNum, err := chainlib.ClGetTrxBlockNum(chargeID)
-			if err != nil {
-				fmt.Printf("blockNum parse err:", err)
-				continue
-			}
-
-			trans := trx
-			trans.TransactionID = chargeID
-			trans.BlockNum = blockNum
-			trans.To = "lmx" // 需要地址映射和权限
-			eos.tick.AddHash(trans)
 		} else {
 			jobid := trx.Category + "_" + trx.TransactionID
 			if job, _ := delayqueue.Get(jobid); job != nil {
@@ -435,18 +413,71 @@ func (eos *EOSBrowser) Tick() {
 	}
 }
 
+//ReTry ...
 func (eos *EOSBrowser) ReTry(trx chainlib.Transaction) bool {
 	blockNum := trx.BlockNum
 
 	sta, err := eos.Irreversible(blockNum)
 	if err != nil || !sta {
-		eos.tick.AddTask(trx, EOSDelaySeconds/2)
+		eos.tick.AddTask(trx, EOSDelaySeconds)
+		return false
+	}
+
+	if trx.To == eos.tickAccount {
+		eos.pushCharge(trx)
+	} else if trx.From == eos.tickAccount {
+		eos.pushExtract(trx)
+	} else {
 		return false
 	}
 
 	return sta
 }
 
+//Close ...
 func (eos *EOSBrowser) Close() {
 	eos.close <- true
+}
+
+//pushCharge push charge action to blockchain
+func (eos *EOSBrowser) pushCharge(trx chainlib.Transaction) error {
+	//exec push action
+	var charge chainlib.ChargeInfo
+	charge.BPName = chainlib.GetCfgProducerName()
+	charge.Hash = trx.TransactionID
+	charge.From = trx.From
+	charge.To = trx.To
+	charge.BlockNum = trx.BlockNum
+	charge.Quantity = strconv.FormatFloat(trx.Amount, 'f', 4, 64)
+	charge.Category = trx.Category
+	charge.Memo = trx.Memo
+
+	// push charge action
+	_, err := chainlib.ClPushCharge("datxio.charg", "charge", charge)
+	if err != nil {
+		fmt.Printf("EOS push charge err: %v\n", err)
+		return err
+	}
+
+	return nil
+}
+
+//pushExtract push extract action to blockchain
+func (eos *EOSBrowser) pushExtract(trx chainlib.Transaction) error {
+	var extract chainlib.ExtractInfo
+	extract.TrxID = trx.Memo
+	extract.Producer = chainlib.GetCfgProducerName()
+
+	bytes, err := json.Marshal(extract)
+	if err != nil {
+		log.Printf("pushExtract marshal failed:%v %v\n", trx, err)
+		return err
+	}
+	_, err = chainlib.ClPushAction("datx.extract", "setsuccess", string(bytes), extract.Producer)
+	if err != nil {
+		log.Printf("Extract push action setsuccess failed:%v %v\n", trx, err)
+		return err
+	}
+
+	return nil
 }

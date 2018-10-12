@@ -10,10 +10,10 @@ namespace datxio {
 
 using namespace appbase;
 
-class faucet_testnet_plugin : public appbase::plugin<faucet_testnet_plugin> {
+class faucet_testp2p_net_plugin : public appbase::plugin<faucet_testp2p_net_plugin> {
 public:
-   faucet_testnet_plugin();
-   ~faucet_testnet_plugin();
+   faucet_testp2p_net_plugin();
+   ~faucet_testp2p_net_plugin();
 
    APPBASE_PLUGIN_REQUIRES((http_plugin))
    virtual void set_program_options(options_description&, options_description& cfg) override;
@@ -23,7 +23,7 @@ public:
    void plugin_shutdown();
 
 private:
-   std::unique_ptr<struct faucet_testnet_plugin_impl> my;
+   std::unique_ptr<struct faucet_testp2p_net_plugin_impl> my;
 };
 
 }

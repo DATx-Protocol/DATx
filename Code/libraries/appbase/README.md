@@ -28,13 +28,13 @@ by `APPBASE_PLUGIN_REQUIRES` will be Initialized or Started prior to the plugin 
 Shutdown is called in the reverse order of Startup. 
 
 ```
-class net_plugin : public appbase::plugin<net_plugin>
+class p2p_net_plugin : public appbase::plugin<p2p_net_plugin>
 {
    public:
-     net_plugin(){};
-     ~net_plugin(){};
+     p2p_net_plugin(){};
+     ~p2p_net_plugin(){};
 
-     APPBASE_PLUGIN_REQUIRES( (chain_plugin) );
+     APPBASE_PLUGIN_REQUIRES( (core_plugin) );
 
      virtual void set_program_options( options_description& cli, options_description& cfg ) override
      {
@@ -53,7 +53,7 @@ class net_plugin : public appbase::plugin<net_plugin>
 
 int main( int argc, char** argv ) {
    try {
-      appbase::app().register_plugin<net_plugin>(); // implict registration of chain_plugin dependency
+      appbase::app().register_plugin<p2p_net_plugin>(); // implict registration of core_plugin dependency
       if( !appbase::app().initialize( argc, argv ) )
          return -1;
       appbase::app().startup();
@@ -73,7 +73,7 @@ int main( int argc, char** argv ) {
 This example can be used like follows:
 
 ```
-./examples/appbase_example --plugin net_plugin
+./examples/appbase_example --plugin p2p_net_plugin
 initialize chain plugin
 initialize net plugin
 starting chain plugin

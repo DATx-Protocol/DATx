@@ -32,6 +32,13 @@ type WalletValueRequest struct {
 	Address  string `form:"address" json:"address" binding:"required"`
 }
 
+// QuantityToAmount ... 不做错误处理
+func QuantityToAmount(quantity string) float64 {
+	value := quantity[:strings.Index(quantity, " ")]
+	amount, _ := strconv.ParseFloat(value, 64)
+	return amount
+}
+
 // GetWalletValue ... DATX，BTC，ETH
 func GetWalletValue(category string, account string) ([]*TokenValue, error) {
 	tokens := make([]*TokenValue, 0)
@@ -150,7 +157,7 @@ func GetDATXBalance(token string, account string) (float64, error) {
 		return 0, err
 	}
 
-	URL := "http://127.0.0.1:8888/v1/chain/get_currency_balance"
+	URL := "http://172.31.3.38:8888/v1/chain/get_currency_balance"
 	request, err := http.NewRequest("POST", URL, bytes.NewReader(bytesData))
 	if err != nil {
 		return 0, err
@@ -178,13 +185,7 @@ func GetDATXBalance(token string, account string) (float64, error) {
 	// ["1216.5698 DBTC"] 要做处理
 	quantity := string(body)
 	quantity = quantity[2 : len(quantity)-2]
-	tokenpos := strings.Index(quantity, " "+strings.ToUpper(token))
-	quantity = quantity[:tokenpos]
-	balance, err := strconv.ParseFloat(quantity, 64)
-	if err != nil {
-		return 0, err
-	}
-	return balance, nil
+	return QuantityToAmount(quantity), nil
 }
 
 // GetETHBalance ...

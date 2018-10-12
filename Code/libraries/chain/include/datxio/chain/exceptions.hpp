@@ -319,15 +319,15 @@ namespace datxio { namespace chain {
    FC_DECLARE_DERIVED_EXCEPTION( plugin_exception, chain_exception,
                                  3110000, "Plugin exception" )
 
-      FC_DECLARE_DERIVED_EXCEPTION( missing_chain_api_plugin_exception,           plugin_exception,
+      FC_DECLARE_DERIVED_EXCEPTION( missing_core_api_plugin_exception,           plugin_exception,
                                     3110001, "Missing Chain API Plugin" )
       FC_DECLARE_DERIVED_EXCEPTION( missing_wallet_api_plugin_exception,          plugin_exception,
                                     3110002, "Missing Wallet API Plugin" )
       FC_DECLARE_DERIVED_EXCEPTION( missing_history_api_plugin_exception,         plugin_exception,
                                     3110003, "Missing History API Plugin" )
-      FC_DECLARE_DERIVED_EXCEPTION( missing_net_api_plugin_exception,             plugin_exception,
+      FC_DECLARE_DERIVED_EXCEPTION( missing_p2p_net_api_plugin_exception,             plugin_exception,
                                     3110004, "Missing Net API Plugin" )
-      FC_DECLARE_DERIVED_EXCEPTION( missing_chain_plugin_exception,               plugin_exception,
+      FC_DECLARE_DERIVED_EXCEPTION( missing_core_plugin_exception,               plugin_exception,
                                     3110005, "Missing Chain Plugin" )
       FC_DECLARE_DERIVED_EXCEPTION( plugin_config_exception,               plugin_exception,
                                     3110006, "Incorrect plugin configuration" )

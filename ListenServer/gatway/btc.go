@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
+	"log"
 	"net/http"
 	"strconv"
 	"strings"
@@ -107,6 +108,7 @@ func NewBTCBrowser(accountAddr string, server *server.ChainServer) *BTCBrowser {
 //GetTrxs https://blockchain.info/rawaddr/$bitcoin_address
 func (btc *BTCBrowser) GetTrxs(addr string) ([]chainlib.Transaction, error) {
 	requrl := btc.url + "/rawaddr/" + addr
+	// requrl := "https://testnet.blockchain.info/rawtx/6c711db1296824782a1206bdc27034c23710a1b4fc3c504b88f0e49583ae29cb"
 
 	// fmt.Printf("BTC GetTrxs request url is : %s\n", requrl)
 
@@ -144,7 +146,7 @@ func (btc *BTCBrowser) GetTrxs(addr string) ([]chainlib.Transaction, error) {
 		}
 
 		for _, out := range v.Out {
-			if out.Addr != addr {
+			if out.Addr != "" && out.Addr != addr {
 				continue
 			}
 
@@ -157,11 +159,12 @@ func (btc *BTCBrowser) GetTrxs(addr string) ([]chainlib.Transaction, error) {
 				infrom = append(infrom, in.PrevOut.Addr)
 			}
 			temp.From = strings.Join(infrom, ",")
-			temp.To = addr
+			temp.To = out.Addr
 			temp.Amount = float64(out.Value) / 100000000 //	监听单位是聪，转为比特币
 			temp.TransactionID = v.Hash
 			temp.IsIrrevisible = false
 			temp.Time = time.Unix(int64(v.Time), 0)
+			temp.Memo = out.Script
 
 			if (latestBlockNum - temp.BlockNum) > BTCIrreversibleCnt {
 				temp.IsIrrevisible = true
@@ -232,7 +235,7 @@ func (btc *BTCBrowser) Tick() {
 
 	for _, trx := range trxs {
 		if trx.IsIrrevisible {
-			// fmt.Printf("trx is irreversible: %v\n", trx.TransactionID)
+			// fmt.Printf("BTC trx is irreversible on Tick(): %v\n", trx.TransactionID)
 			//exec push action
 
 			if btc.handleHeight < trx.BlockNum {
@@ -240,59 +243,106 @@ func (btc *BTCBrowser) Tick() {
 				fmt.Printf("trx btc from: %v  %v\n", trx.TransactionID, btc.handleHeight)
 			}
 
-			var charge chainlib.ChargeInfo
-			charge.Hash = trx.TransactionID
-			charge.From = trx.From
-			charge.To = trx.To
-			charge.BlockNum = trx.BlockNum
-			charge.Quantity = strconv.FormatFloat(trx.Amount, 'f', 4, 64)
-			charge.Category = trx.Category
-			charge.Memo = trx.Memo
-
-			// 需要钱包密码
-			_, err := chainlib.ClWalletUnlock("PW5JHPpaGrS7bKhmQJ5Rb7rNSXhp3S3sXN2fGWaqQNzQufQaWrkUJ")
-			// 需要合约权限
-			chargeID, err := chainlib.ClPushCharge("datxio.charg", "charge", charge)
-			if err != nil {
-				fmt.Printf("BTC push charge err:", err)
-				continue
+			if trx.To != "" {
+				btc.pushCharge(trx)
+			} else {
+				btc.pushExtract(trx)
 			}
-			blockNum, err := chainlib.ClGetTrxBlockNum(chargeID)
-			if err != nil {
-				fmt.Printf("blockNum parse err:", err)
-				continue
-			}
-
-			trans := trx
-			trans.TransactionID = chargeID
-			trans.BlockNum = blockNum
-			trans.To = "lmx"    // 需要地址映射和权限
-			btc.tick.AddHash(trans)
 		} else {
 			jobid := trx.Category + "_" + trx.TransactionID
 			if job, _ := delayqueue.Get(jobid); job != nil {
-				fmt.Printf("btc trx is existed: %v\n", trx.TransactionID)
+				fmt.Printf("BTC trx is existed: %v\n", trx.TransactionID)
 				continue
 			}
 
-			fmt.Printf("add btc task: %v  %v\n", trx.TransactionID, time.Now().Unix())
+			fmt.Printf("BTC add btc to delay task on Tick(): %v  %v\n", trx.TransactionID, time.Now().Unix())
 			btc.tick.AddTask(trx, BTCDelaySeconds)
 		}
 	}
 }
 
+//ReTry ...
 func (btc *BTCBrowser) ReTry(trx chainlib.Transaction) bool {
+	fmt.Printf("BTC trx on ReTry(): %v\n", trx.TransactionID)
 	blockNum := trx.BlockNum
 
 	sta, err := btc.Irreversible(blockNum)
 	if err != nil || !sta {
-		btc.tick.AddTask(trx, BTCDelaySeconds/2)
+		btc.tick.AddTask(trx, BTCDelaySeconds)
 		return false
+	}
+
+	if trx.To != "" {
+		btc.pushCharge(trx)
+	} else {
+		btc.pushExtract(trx)
 	}
 
 	return sta
 }
 
+//Close ...
 func (btc *BTCBrowser) Close() {
 	btc.close <- true
+}
+
+func (btc *BTCBrowser) pushCharge(trx chainlib.Transaction) error {
+	var charge chainlib.ChargeInfo
+	charge.BPName = chainlib.GetCfgProducerName()
+	charge.Hash = trx.TransactionID
+	charge.From = trx.From
+	charge.To = trx.To
+	charge.BlockNum = trx.BlockNum
+	charge.Quantity = strconv.FormatFloat(trx.Amount, 'f', 4, 64)
+	charge.Category = trx.Category
+	charge.Memo = trx.Memo
+
+	_, err := chainlib.ClPushCharge("datxio.charg", "charge", charge)
+	if err != nil {
+		fmt.Printf("BTC push charge err:%v\n", err)
+		return err
+	}
+
+	return nil
+}
+
+func (btc *BTCBrowser) pushExtract(trx chainlib.Transaction) error {
+	//get trxID by memo
+	//eg: https://127.0.0.1:8080/btc/decodeMemo?script=6a0d626974636f696e6a732d6c6962
+	url := fmt.Sprintf("https://127.0.0.1:8080/btc/decodeMemo?script=%s", trx.Memo)
+
+	resp, err := http.Get(url)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != 200 {
+		return fmt.Errorf("BTC decodeMemo Response error: %v", resp.Status)
+	}
+
+	body, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		return err
+	}
+
+	trxid := string(body)
+	log.Printf("get trx id from script:%v\n", trxid)
+
+	var extract chainlib.ExtractInfo
+	extract.TrxID = trxid
+	extract.Producer = chainlib.GetCfgProducerName()
+
+	bytes, err := json.Marshal(extract)
+	if err != nil {
+		log.Printf("pushExtract marshal failed:%v %v\n", trx, err)
+		return err
+	}
+	_, err = chainlib.ClPushAction("datx.extract", "setsuccess", string(bytes), extract.Producer)
+	if err != nil {
+		log.Printf("Extract push action setsuccess failed:%v %v\n", trx, err)
+		return err
+	}
+
+	return nil
 }

@@ -3,5 +3,5 @@ add_library( login_plugin
              login_plugin.cpp
              ${HEADERS} )
 
-target_link_libraries( login_plugin chain_plugin http_plugin appbase )
+target_link_libraries( login_plugin core_plugin http_plugin appbase )
 target_include_directories( login_plugin PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/include" )

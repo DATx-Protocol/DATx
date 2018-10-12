@@ -174,7 +174,110 @@ type ExtractAction struct {
 	} `json:"action_trace"`
 }
 
+//ExtractActions
 type ExtractActions struct {
 	Actions               []ExtractAction `json:"actions"`
 	LastIrreversibleBlock int             `json:"last_irreversible_block"`
+}
+
+//Transaction
+type Transaction struct {
+	ID  string `json:"id"`
+	Trx struct {
+		Receipt struct {
+			Status        string        `json:"status"`
+			CPUUsageUs    int           `json:"cpu_usage_us"`
+			NetUsageWords int           `json:"net_usage_words"`
+			Trx           []interface{} `json:"trx"`
+		} `json:"receipt"`
+		Trx struct {
+			Expiration         string        `json:"expiration"`
+			RefBlockNum        int           `json:"ref_block_num"`
+			RefBlockPrefix     int           `json:"ref_block_prefix"`
+			MaxNetUsageWords   int           `json:"max_net_usage_words"`
+			MaxCPUUsageMs      int           `json:"max_cpu_usage_ms"`
+			DelaySec           int           `json:"delay_sec"`
+			ContextFreeActions []interface{} `json:"context_free_actions"`
+			Actions            []struct {
+				Account       string `json:"account"`
+				Name          string `json:"name"`
+				Authorization []struct {
+					Actor      string `json:"actor"`
+					Permission string `json:"permission"`
+				} `json:"authorization"`
+				Data struct {
+					Hash     string `json:"hash"`
+					From     string `json:"from"`
+					To       string `json:"to"`
+					Quantity string `json:"quantity"`
+					Memo     string `json:"memo"`
+				} `json:"data"`
+				HexData string `json:"hex_data"`
+			} `json:"actions"`
+			TransactionExtensions []interface{} `json:"transaction_extensions"`
+			Signatures            []string      `json:"signatures"`
+			ContextFreeData       []interface{} `json:"context_free_data"`
+		} `json:"trx"`
+	} `json:"trx"`
+	BlockTime             string `json:"block_time"`
+	BlockNum              int    `json:"block_num"`
+	LastIrreversibleBlock int    `json:"last_irreversible_block"`
+	Traces                []struct {
+		Receipt struct {
+			Receiver       string          `json:"receiver"`
+			ActDigest      string          `json:"act_digest"`
+			GlobalSequence int             `json:"global_sequence"`
+			RecvSequence   int             `json:"recv_sequence"`
+			AuthSequence   [][]interface{} `json:"auth_sequence"`
+			CodeSequence   int             `json:"code_sequence"`
+			AbiSequence    int             `json:"abi_sequence"`
+		} `json:"receipt"`
+		Act struct {
+			Account       string `json:"account"`
+			Name          string `json:"name"`
+			Authorization []struct {
+				Actor      string `json:"actor"`
+				Permission string `json:"permission"`
+			} `json:"authorization"`
+			Data struct {
+				Hash     string `json:"hash"`
+				From     string `json:"from"`
+				To       string `json:"to"`
+				Quantity string `json:"quantity"`
+				Memo     string `json:"memo"`
+			} `json:"data"`
+			HexData string `json:"hex_data"`
+		} `json:"act"`
+		Elapsed       int    `json:"elapsed"`
+		CPUUsage      int    `json:"cpu_usage"`
+		Console       string `json:"console"`
+		TotalCPUUsage int    `json:"total_cpu_usage"`
+		TrxID         string `json:"trx_id"`
+		InlineTraces  []struct {
+			Receipt struct {
+				Receiver       string          `json:"receiver"`
+				ActDigest      string          `json:"act_digest"`
+				GlobalSequence int             `json:"global_sequence"`
+				RecvSequence   int             `json:"recv_sequence"`
+				AuthSequence   [][]interface{} `json:"auth_sequence"`
+				CodeSequence   int             `json:"code_sequence"`
+				AbiSequence    int             `json:"abi_sequence"`
+			} `json:"receipt"`
+			Act struct {
+				Account       string `json:"account"`
+				Name          string `json:"name"`
+				Authorization []struct {
+					Actor      string `json:"actor"`
+					Permission string `json:"permission"`
+				} `json:"authorization"`
+				Data string `json:"data"`
+			} `json:"act"`
+			Elapsed       int           `json:"elapsed"`
+			CPUUsage      int           `json:"cpu_usage"`
+			Console       string        `json:"console"`
+			TotalCPUUsage int           `json:"total_cpu_usage"`
+			TrxID         string        `json:"trx_id"`
+			InlineTraces  []interface{} `json:"inline_traces"`
+		} `json:"inline_traces"`
+	} `json:"traces"`
 }
