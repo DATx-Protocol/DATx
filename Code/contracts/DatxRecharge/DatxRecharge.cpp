@@ -10,15 +10,15 @@ namespace datxio
 /// @abi action
 void recharge::recorduser(account_name datxaddress,string address,account_name bpname)
 {
-    require_auth(bpname);
-    account_name producers[21]; 
-    uint32_t bytes_populated = get_active_producers(producers, sizeof(account_name)*21); 
-        bool Isproducer = false; 
-        for (int i = 0; i < sizeof(producers)/sizeof(account_name) ;i++){ 
-             if(producers[i] == bpname) 
-             Isproducer = true; 
-        } 
-        datxio_assert(Isproducer, "this func can only be called by producers");
+    // require_auth(bpname);
+    // account_name producers[21]; 
+    // uint32_t bytes_populated = get_active_producers(producers, sizeof(account_name)*21); 
+    //     bool Isproducer = false; 
+    //     for (int i = 0; i < sizeof(producers)/sizeof(account_name) ;i++){ 
+    //          if(producers[i] == bpname) 
+    //          Isproducer = true; 
+    //     } 
+    //     datxio_assert(Isproducer, "this func can only be called by producers");
 
     // define the table 
         users users_table(_self,_self);
@@ -37,18 +37,18 @@ void recharge::recorduser(account_name datxaddress,string address,account_name b
         });    
 }
 /// @abi action
-void recharge::charge(account_name bpname,string hash,string from,string to,string blocknum,string quantity,string category,string memo)
-{
-        require_auth(bpname);
-    //check the caller is producer
-        account_name producers[21]; 
-        uint32_t bytes_populated = get_active_producers(producers, sizeof(account_name)*21); 
-        bool Isproducer = false; 
-        for (int i = 0; i < sizeof(producers)/sizeof(account_name) ;i++){ 
-             if(producers[i] == bpname) 
-             Isproducer = true; 
-        } 
-        datxio_assert(Isproducer, "this func can only be called by producers");
+void recharge::charge(account_name bpname,string hash,string from,string to,int64_t blocknum,string quantity,string category,string memo)
+ {
+//         require_auth(bpname);
+//     //check the caller is producer
+//         account_name producers[21]; 
+//         uint32_t bytes_populated = get_active_producers(producers, sizeof(account_name)*21); 
+//         bool Isproducer = false; 
+//         for (int i = 0; i < sizeof(producers)/sizeof(account_name) ;i++){ 
+//              if(producers[i] == bpname) 
+//              Isproducer = true; 
+//         } 
+//         datxio_assert(Isproducer, "this func can only be called by producers");
         
     //get all expired transactions and remove to expirdrecord
         this->expired_trx();
@@ -60,7 +60,7 @@ void recharge::charge(account_name bpname,string hash,string from,string to,stri
 
     // caculate hash for trx data
 
-        string str=hash+from+to+blocknum+quantity+category+memo;
+        string str=hash+from+to+std::to_string(blocknum)+quantity+category+memo;
         char *data=(char*)str.c_str();
         checksum256 calc_hash;
         sha256( data, sizeof(data), &calc_hash );
@@ -73,12 +73,12 @@ void recharge::charge(account_name bpname,string hash,string from,string to,stri
     //check the data hash whether equal
         auto idx = records_table.template get_index<N(data)>();
         auto itr = idx.find(get_hash(calc_hash));
-        if(itr==idx.end()){
+        if(itr!=idx.end()){
             //check producer whether more than 15
             if(sizeof(itr->producers)<15)
             {
                 auto itr3 = std::find( itr->producers.begin(), itr->producers.end(), bpname );
-                datxio_assert( itr3 == itr->producers.end(), "This producer already initiated a request for this transaction!");    
+                datxio_assert( itr3 != itr->producers.end(), "This producer already initiated a request for this transaction!");    
                 records_table.modify(*itr, get_self(), [&](auto& p)
                                                 {
                                                     p.producers.push_back(bpname);
@@ -92,12 +92,17 @@ void recharge::charge(account_name bpname,string hash,string from,string to,stri
                 checksum256 address;
                 sha256( c, sizeof(c), &address);
                 asset quant{fc::to_int64(quantity),S(4,category)};
-                if(category=="BTC"||category=="ETH")
-                {
+                if(category=="EOS"){
+                    action(
+                        permission_level{N(datxio.deos), N(active) },
+                        N(datxio.deos), N(transfer),
+                        std::make_tuple(N(datxio.deos), N(memo), quant,memo)
+                    ).send();
+                }else{
                     users user_table(_self,_self);
                     auto index = user_table.template get_index<N(address)>();
                     auto addr = index.find( get_hash(address));
-                    datxio_assert(addr!=index.end(), "This address isn't exists");
+                    datxio_assert(addr==index.end(), "This address isn't exists");
                     if(category=="BTC")
                     {
                         action(
@@ -113,12 +118,6 @@ void recharge::charge(account_name bpname,string hash,string from,string to,stri
                             std::make_tuple(N(datxio.deth), N(addr->datxaddress), quant,memo)
                         ).send();
                     }
-                }else{
-                    action(
-                        permission_level{N(datxio.deos), N(active) },
-                        N(datxio.deos), N(transfer),
-                        std::make_tuple(N(datxio.deos), N(memo), quant,memo)
-                    ).send();
                 }
                 //after transfer to datxaddress remove info to success
                 success_table.emplace(_self, [&](auto &s) 
@@ -127,7 +126,7 @@ void recharge::charge(account_name bpname,string hash,string from,string to,stri
                     s.trxid= hash;
                     s.from = from;
                     s.to = to;
-                    s.blocknum= blocknum;
+                    s.blocknum= std::to_string(blocknum);
                     s.quantity=quantity;
                     s.category=category;
                     s.memo = memo;
@@ -136,7 +135,7 @@ void recharge::charge(account_name bpname,string hash,string from,string to,stri
                 records_table.erase(*itr);//remove the transaction in the record_table
                 auto in = expired_table.template get_index<N(data)>();
                 auto r = in.find(get_hash(calc_hash) );
-                if(r==in.end())
+                if(r!=in.end())
                 {
                     expired_table.erase(*r);
                 }
@@ -158,7 +157,7 @@ void recharge::charge(account_name bpname,string hash,string from,string to,stri
                 s.memo = memo;
                 s.data=calc_hash; 
                 s.start_time=current_time(); //seconds
-                s.producers[0]=bpname;
+                s.producers=producers_name;
             });       
         }
 }
@@ -176,45 +175,46 @@ void recharge::expired_trx()
             countrecords count_table(_self,_self);
             auto id =count_table.template get_index<N(data)>();
             auto i = id.find( get_hash(it->data) );
-            if(i==id.end()&&i->count >=3)
-            {  
-                break;
-            }else
-            {
-                if(i==id.end()&&i->count <3)
+  
+                if(i!=id.end()&&i->count <3)
                 {
                     count_table.modify(*i, get_self(), [&](auto& c)
                     {
                         c.count=i->count+1;
                     });
-                }else
+
+                    ++it;
+                }else if (i==id.end())
                 {
                     count_table.emplace(_self, [&](auto &co){
                         co.id=count_table.available_primary_key();
                         co.data=it->data;
                         co.count=1;
                     });
+
+                    expirations expire_table(_self,_self);
+                    expire_table.emplace(_self, [&](auto &e) {
+                        e.id= expire_table.available_primary_key();
+                        e.trxid=it->trxid;
+                        e.from=it->from;
+                        e.blocknum=it->blocknum;
+                        e.quantity=it->quantity;
+                        e.category=it->category;
+                        e.memo=it->memo;
+                        e.data=it->data;        
+                    }); 
+                    it = trans_table.erase(it);
+                    ++count;
+                }else{
+                    ++it;
                 }
-                expirations expire_table(_self,_self);
-                expire_table.emplace(_self, [&](auto &e) {
-                    e.id= expire_table.available_primary_key();
-                    e.trxid=it->trxid;
-                    e.from=it->from;
-                    e.blocknum=it->blocknum;
-                    e.quantity=it->quantity;
-                    e.category=it->category;
-                    e.memo=it->memo;
-                    e.data=it->data;        
-                }); 
-            }
-            it = trans_table.erase(it);
-            ++count;
         }else
         {
-             ++it; 
+            ++it;
         }
     }
 }
+
 
 } // namespace Datxio
 

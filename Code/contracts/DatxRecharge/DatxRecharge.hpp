@@ -31,7 +31,7 @@ class recharge : public contract
                 string hash,
                 string from,
                 string to,
-                string blocknum,
+                int64_t blocknum,
                 string quantity,
                 string category,
                 string memo);
