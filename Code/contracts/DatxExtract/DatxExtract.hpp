@@ -50,12 +50,14 @@ class extract : public contract
 
         uint64_t primary_key() const { return id; }
         key256 by_fixed_key() const {return get_fixed_key(trxid);}
+        uint64_t by_start_time() const {return start_time;}
 
         DATXLIB_SERIALIZE(record, (id)(trxid)(start_time)(verifiers)(countdown_time)(successconfirm)(producer)(category))
     };
 
-    typedef multi_index<N(record), record,indexed_by<N(fixed_key), const_mem_fun<record, key256, &record::by_fixed_key>>> records;
-
+    
+    typedef multi_index<N(record), record,indexed_by<N(fixed_key), const_mem_fun<record, key256, &record::by_fixed_key>>
+        ,indexed_by<N(start_time),const_mem_fun<record,uint64_t,&record::by_start_time>>> records;
     /// @abi table
     struct success
     {
@@ -98,6 +100,24 @@ class extract : public contract
         DATXLIB_SERIALIZE(verifier, (account))
     };
     typedef datxio::multi_index<N(verifier), verifier> verifiers;
+
+    /// @abi table
+    struct transrecord
+    {
+        uint64_t            id; 
+        transaction_id_type trxid;
+        string              category;
+        account_name        account;
+        asset               quantity;
+        string              memo;
+
+        uint64_t primary_key() const { return id; }
+        key256 by_fixed_key() const {return get_fixed_key(trxid);}
+
+        DATXLIB_SERIALIZE(transrecord, (id)(trxid)(category)(account)(quantity)(memo))
+    };
+    typedef datxio::multi_index<N(transrecord), transrecord,indexed_by<N(fixed_key), const_mem_fun<transrecord, key256, &transrecord::by_fixed_key>>> transrecords;
+
 
 };
 

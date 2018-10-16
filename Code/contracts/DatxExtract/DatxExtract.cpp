@@ -12,17 +12,24 @@ namespace datxio
         this->rollbacktrx();
 
         require_auth(producer);
-
-        datxio_assert(category.size() != 0, "category is null");
-        
         account_name producers[21]; 
         uint32_t bytes_populated = get_active_producers(producers, sizeof(account_name)*21); 
         bool Isproducer = false; 
         for (int i = 0; i < sizeof(producers)/sizeof(account_name) ;i++){ 
-             if(producers[i] == producer) 
-             Isproducer = true; 
+            if(producers[i] == producer) 
+            Isproducer = true; 
+            break;
         } 
         datxio_assert(Isproducer, "this func can only be called by producers");
+
+        transrecords transrecord_table(N(Datxio.token),N(Datxio.token));
+        auto idx0 = transrecord_table.template get_index<N(fixed_key)>();
+        auto itr0 = idx0.find( get_fixed_key(trxid) );
+        datxio_assert(itr0 != idx0.end(), "trxid not exists in token transfer");
+
+        datxio_assert(itr0 ->quantity.symbol.name() == string_to_name(category.c_str())
+        ,"category not correct");
+
 
         records trans_table(_self,_self);
         auto idx = trans_table.template get_index<N(fixed_key)>();
@@ -119,6 +126,7 @@ namespace datxio
         for (int i = 0; i < sizeof(producers)/sizeof(account_name) ;i++){ 
              if(producers[i] == producer) 
              Isproducer = true; 
+             break;
         } 
         datxio_assert(Isproducer, "this func can only be called by producers");
 
@@ -149,27 +157,27 @@ namespace datxio
     /// @abi action
     void extract::updateexpire(){
         records trans_table(_self,_self);
+        auto idx = trans_table.template get_index<N(start_time)>();
         int count = 0;
-        for ( auto it = trans_table.cbegin(); it != trans_table.cend() && count < 100;) {
+        for ( auto it = idx.cbegin(); it != idx.cend() && count < 100;) {
+            uint64_t subtime = now() - it->start_time;
+            if(subtime <= 5 * 60){
+                break;
+            }
             if(it->verifiers.size() < 15){
-                uint64_t subtime = now() - it->start_time;
+                expirations expire_table(_self,_self);
+                expire_table.emplace(_self, [&](auto &s) {
+                    s.id= expire_table.available_primary_key();
+                    s.trxid= it->trxid;
+                    s.timestamp = now();
+                    s.producer = it->producer;
+                    s.category = it->category;
+                });
 
-                if ((it->category == "ETH" && subtime > 30*60) || (it->category == "EOS" && subtime > 5*60)){
-                    expirations expire_table(_self,_self);
-                    expire_table.emplace(_self, [&](auto &s) {
-                        s.id= expire_table.available_primary_key();
-                        s.trxid= it->trxid;
-                        s.timestamp = now();
-                        s.producer = it->producer;
-                        s.category = it->category;
-                    });
-    
-                    it = trans_table.erase(it);
+                it = idx.erase(it);
 
-                    ++count;
-                }else{
-                    ++it;
-                }
+                ++count;
+
             }else{
                 ++it;
             }
@@ -178,14 +186,37 @@ namespace datxio
 
     void extract::rollbacktrx(){
         records trans_table(_self,_self);
+        successtrxs success_table(_self,_self);
+
         for ( auto it = trans_table.cbegin(); it != trans_table.cend(); ++it) { 
             auto trxid = it->trxid;
 
             //get transaction details and rollback
             uint64_t subtime = current_time() - it->countdown_time;
 
-            if ((it->category == "ETH" && subtime > 30*60) || (it->category == "EOS" && subtime > 5*60)){
-                
+            if ((it->category == "DETH" && subtime > 30*60) || (it->category == "DEOS" && subtime > 5*60)){
+                        
+                transrecords transrecord_table(N(datxio.recharge),N(datxio.recharge));
+                auto idx0 = transrecord_table.template get_index<N(fixed_key)>();
+                auto itr0 = idx0.find( get_fixed_key(trxid) );
+
+                datxio_assert(itr0 != idx0.end(), "trxid not exists in token transfer");
+
+                // pay the cost
+                action(permission_level{ _self, N(active) },
+                    N(eosio.token), N(transfer),
+                    std::make_tuple(N(datxio.recharge),itr0 -> account, itr0 -> quantity, std::string(""))
+                ).send();
+
+                success_table.emplace(_self, [&](auto &s) {
+                    s.id= success_table.available_primary_key();
+                    s.trxid= trxid;
+                    s.producer = it -> producer;
+                    s.timestamp = now();
+                    s.category = it->category;
+                });
+                trans_table.erase(*it);
+
             }
         }
     }
