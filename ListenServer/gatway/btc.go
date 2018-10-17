@@ -338,7 +338,7 @@ func (btc *BTCBrowser) pushExtract(trx chainlib.Transaction) error {
 		log.Printf("pushExtract marshal failed:%v %v\n", trx, err)
 		return err
 	}
-	_, err = chainlib.ClPushAction("datx.extract", "setsuccess", string(bytes), extract.Producer)
+	_, err = chainlib.ClPushAction("datxio.extra", "setsuccess", string(bytes), extract.Producer)
 	if err != nil {
 		log.Printf("Extract push action setsuccess failed:%v %v\n", trx, err)
 		return err

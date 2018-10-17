@@ -14,14 +14,15 @@ import (
 
 // TrxInfo ...
 type TrxInfo struct {
-	Token    string `json:"token"` // DATX，DBTC，DETH，DEOS，BTC，ETH，EOS
-	Trxid    string `json:"trxid"`
-	Quantity string `json:"quantity"` // "2 DATX"
-	Blocknum int64  `json:"blocknum"`
-	From     string `json:"from"`
-	To       string `json:"to"`
-	Time     string `json:"time"`  // "2018-9-4 15:30:56"
-	Value    string `json:"value"` // "$12.50"
+	Token     string `json:"token"` // DATX，DBTC，DETH，DEOS，BTC，ETH，EOS
+	Trxid     string `json:"trxid"`
+	Quantity  string `json:"quantity"` // "2 DATX"
+	Blocknum  int64  `json:"blocknum"`
+	From      string `json:"from"`
+	To        string `json:"to"`
+	Direction string `json:"direction"`
+	Time      string `json:"time"`  // "2018-9-4 15:30:56"
+	Value     string `json:"value"` // "$12.50"
 }
 
 // WalletTrxRequest ...
@@ -89,7 +90,7 @@ func GetDATXTrxList(account string, pos int64, offset int64) ([]*TrxInfo, error)
 		return nil, fmt.Errorf("datx get_actions parameter error %v", formData)
 	}
 
-	URL := "http://172.31.3.38:8888/v1/history/get_actions"
+	URL := WalletConfig.DatxIP + "/v1/history/get_actions"
 	request, err := http.NewRequest("POST", URL, bytes.NewReader(bytesData))
 	if err != nil {
 		return nil, fmt.Errorf("datx get_actions request error %v", err)
@@ -138,6 +139,11 @@ func GetDATXTrxList(account string, pos int64, offset int64) ([]*TrxInfo, error)
 		trx.Blocknum = act.Blocknum
 		trx.From = act.ActionTrace.Act.Data.From
 		trx.To = act.ActionTrace.Act.Data.To
+		if trx.To == account {
+			trx.Direction = "收入"
+		} else {
+			trx.Direction = "支出"
+		}
 		trx.Time = act.Time
 		amount := QuantityToAmount(trx.Quantity)
 		price, _ := GetTokenPrice(trx.Token)
@@ -217,6 +223,11 @@ func GetETHTrxList(account string, limit int64) ([]*TrxInfo, error) {
 		trx.Blocknum = blocknum
 		trx.From = trxs[i].From
 		trx.To = trxs[i].To
+		if trx.To == account {
+			trx.Direction = "收入"
+		} else {
+			trx.Direction = "支出"
+		}
 		timeint64, _ := strconv.ParseInt(trxs[i].Time, 10, 64)
 		trx.Time = time.Unix(timeint64, 0).Format("2006-01-02 15:04:05")
 		price, _ := GetTokenPrice(trx.Token)

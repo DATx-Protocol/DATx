@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
+	"log"
 	"net/http"
 	"strconv"
 	"time"
@@ -341,7 +342,13 @@ func (eth *ETHBrowser) Tick() {
 				fmt.Printf("ETH trx irreversible from: %v  %v\n", trx.TransactionID, eth.handleHeight)
 			}
 
-			eth.pushCharge(trx)
+			if trx.To == eth.tickAddress {
+				eth.pushCharge(trx)
+			} else if trx.From == eth.tickAddress {
+				eth.pushExtract(trx)
+			} else {
+				continue
+			}
 
 		} else {
 			jobid := trx.Category + "_" + trx.TransactionID
@@ -367,7 +374,13 @@ func (eth *ETHBrowser) ReTry(trx chainlib.Transaction) bool {
 		return false
 	}
 
-	eth.pushCharge(trx)
+	if trx.To == eth.tickAddress {
+		eth.pushCharge(trx)
+	} else if trx.From == eth.tickAddress {
+		eth.pushExtract(trx)
+	} else {
+		return false
+	}
 
 	return sta
 }
@@ -391,6 +404,26 @@ func (eth *ETHBrowser) pushCharge(trx chainlib.Transaction) error {
 	_, err := chainlib.ClPushCharge("datxio.charg", "charge", charge)
 	if err != nil {
 		fmt.Printf("ETH push charge err: %v\n:", err)
+		return err
+	}
+
+	return nil
+}
+
+//pushExtract push extract action to blockchain
+func (eth *ETHBrowser) pushExtract(trx chainlib.Transaction) error {
+	var extract chainlib.ExtractInfo
+	extract.TrxID = trx.Memo
+	extract.Producer = chainlib.GetCfgProducerName()
+
+	bytes, err := json.Marshal(extract)
+	if err != nil {
+		log.Printf("pushExtract marshal failed:%v %v\n", trx, err)
+		return err
+	}
+	_, err = chainlib.ClPushAction("datxio.extra", "setsuccess", string(bytes), extract.Producer)
+	if err != nil {
+		log.Printf("Extract push action setsuccess failed:%v %v\n", trx, err)
 		return err
 	}
 

@@ -52,7 +52,7 @@ func GetSignupTrxList(account string, pos int64, offset int64) ([]*SignupTrxInfo
 		return nil, fmt.Errorf("datx get_actions parameter error %v", formData)
 	}
 
-	URL := "http://172.31.3.38:8888/v1/history/get_actions"
+	URL := WalletConfig.DatxIP + "/v1/history/get_actions"
 	request, err := http.NewRequest("POST", URL, bytes.NewReader(bytesData))
 	if err != nil {
 		return nil, fmt.Errorf("datx get_actions request error %v", err)
@@ -153,11 +153,35 @@ func MatchSignupAccount(request SignupAccountRequest, trxList []*SignupTrxInfo) 
 // ClSystemNewaccount ...
 func ClSystemNewaccount(sign *SignupAccountInfo) (string, error) {
 	ramAmount := strconv.FormatFloat(QuantityToAmount(sign.Quantity)-0.2, 'f', 4, 64)
-	command := "cldatx -u http://172.31.3.38:8888/ system newaccount " +
+	command := "cldatx -u " + WalletConfig.DatxIP + " system newaccount " +
 		sign.SysAccount + " " + sign.NewAccount + " " + sign.PublicKey +
 		" --stake-net '0.1 DATX' --stake-cpu '0.1 DATX' --buy-ram '" + ramAmount + " DATX'" +
 		" -j " + " -f " + " -p " + sign.SysAccount
 	fmt.Println(command)
-	chainlib.ClWalletUnlock("PW5JHPpaGrS7bKhmQJ5Rb7rNSXhp3S3sXN2fGWaqQNzQufQaWrkUJ")
+	chainlib.ClWalletUnlock(WalletConfig.PassWord)
 	return chainlib.ExecShell(command)
+}
+
+// Config ...
+type Config struct {
+	DatxIP   string `json:"datxip"`
+	PassWord string `json:"password"`
+}
+
+// WalletConfig ...
+var (
+	WalletConfig = &Config{}
+)
+
+// LoadConfig ...
+func LoadConfig() {
+	file, err := ioutil.ReadFile("config.json")
+	if err != nil {
+		fmt.Println("load config error: ", err)
+	}
+	err = json.Unmarshal(file, &WalletConfig)
+	if err != nil {
+		fmt.Println("para config failed: ", err)
+	}
+	fmt.Println(WalletConfig)
 }

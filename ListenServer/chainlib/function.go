@@ -118,8 +118,12 @@ func ClWalletUnlock(password string) (string, error) {
 
 // ClPushAction ...
 func ClPushAction(account, action, data, permission string) (string, error) {
-	//Ensure that your wallet is unlocked before using it!
-	// unlockwallet := fmt.Sprintf("cldatx wallet unlock --password %s", "PW5KYDG5GHavJUr28xHQ84km6M3czUaRh4HNJWxDa3drDZcpWF5cD")
+	// //Ensure that your wallet is unlocked before using it!
+	// keys := GetCfgProducerKey()
+	// if len(keys) != 2 {
+	// 	return "", fmt.Errorf("ClPushAction get producer keys error")
+	// }
+	// unlockwallet := fmt.Sprintf("cldatx wallet unlock --password %s", keys[0])
 	// _, err := ExecShell(unlockwallet)
 	// str := err.Error()
 

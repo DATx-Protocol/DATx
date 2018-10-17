@@ -1,8 +1,8 @@
 package main
 
 import (
-	"datx/ListenServer/delayqueue"
 	"datx/ListenServer/gatway"
+	"datx/ListenServer/http"
 	"datx/ListenServer/server"
 	"log"
 )
@@ -26,10 +26,10 @@ func main() {
 	server.GetOuterTrxTable("user", "user", "games")
 
 	//自测通过
-	httpServer := delayqueue.NewHTTPPlugin()
+	httpServer := http.NewHTTPServer()
 	httpServer.InitWithEndpoint("localhost", "8880")
 	if err := httpServer.Open(); err != nil {
-		log.Printf("httpplugin open err={%v}", err)
+		log.Printf("httpaccessory open err={%v}", err)
 		return
 	}
 	defer httpServer.Close()

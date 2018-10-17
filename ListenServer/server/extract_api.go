@@ -154,7 +154,7 @@ func (ext *Extract) pushExtractAction(trx chainlib.Transaction) error {
 		log.Printf("PushExtractAction marshal failed:%v %v\n", trx, err)
 		return err
 	}
-	_, err = chainlib.ClPushAction("datx.extract", "recordtrx", string(bytes), "datxio")
+	_, err = chainlib.ClPushAction("datxio.extra", "recordtrx", string(bytes), "datxio")
 	if err != nil {
 		log.Printf("Extract push recordtrx failed:%v %v\n", trx, err)
 		return err

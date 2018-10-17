@@ -157,7 +157,7 @@ func GetDATXBalance(token string, account string) (float64, error) {
 		return 0, err
 	}
 
-	URL := "http://172.31.3.38:8888/v1/chain/get_currency_balance"
+	URL := WalletConfig.DatxIP + "/v1/chain/get_currency_balance"
 	request, err := http.NewRequest("POST", URL, bytes.NewReader(bytesData))
 	if err != nil {
 		return 0, err

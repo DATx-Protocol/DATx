@@ -1,8 +1,14 @@
 package main
 
 import (
+	"datx/ListenServer/explorer"
+
 	"github.com/gin-gonic/gin"
 )
+
+func init() {
+	explorer.LoadConfig()
+}
 
 func main() {
 	router := gin.Default()
@@ -12,5 +18,6 @@ func main() {
 	router.POST("/wallet_trx_list", postWalletTrxList)
 	router.POST("/resource", postDATXResource)
 	router.POST("/new_account", postDATXSignup)
-	router.Run(":8081")
+	router.POST("/address_map", postAddressMap)
+	router.Run(":9101")
 }

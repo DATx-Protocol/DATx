@@ -144,3 +144,29 @@ func postDATXSignup(ctx *gin.Context) {
 		"data":    TrxResult{trxID},
 	})
 }
+
+func postAddressMap(ctx *gin.Context) {
+	var request explorer.AddressMapRequest
+	err := ctx.BindJSON(&request)
+	if err != nil {
+		jsonBindingError(ctx)
+		return
+	}
+
+	outStr, err := explorer.ClRecordUser(request.DatxAddress, request.Address)
+	if err != nil {
+		explorerError(ctx, err)
+		return
+	}
+	trxID, err := chainlib.ParseTrxID(outStr)
+	if err != nil {
+		explorerError(ctx, err)
+		return
+	}
+
+	ctx.JSON(http.StatusOK, gin.H{
+		"code":    200,
+		"message": "OK",
+		"data":    TrxResult{trxID},
+	})
+}

@@ -61,7 +61,7 @@ func GetDATXResource(account string) (*ResourceInfo, error) {
 		return nil, fmt.Errorf("datx get_account parameter error %v", formData)
 	}
 
-	URL := "http://172.31.3.38:8888/v1/chain/get_account"
+	URL := WalletConfig.DatxIP + "/v1/chain/get_account"
 	request, err := http.NewRequest("POST", URL, bytes.NewReader(bytesData))
 	if err != nil {
 		return nil, fmt.Errorf("datx get_account request error %v", err)

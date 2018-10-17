@@ -1,4 +1,4 @@
-package delayqueue
+package http
 
 import (
 	"log"
@@ -11,24 +11,24 @@ import (
 //HTTPHandler func
 type HTTPHandler func(w http.ResponseWriter, r *http.Request)
 
-//HTTPPlugin struct
-type HTTPPlugin struct {
+//HttpServer struct
+type HttpServer struct {
 	Host      string
 	Port      string
 	NewRouter *mux.Router
 	Server    *http.Server
 }
 
-//NewHTTPPlugin new
-func NewHTTPPlugin() *HTTPPlugin {
-	p := &HTTPPlugin{
+//NewHTTPServer new
+func NewHTTPServer() *HttpServer {
+	p := &HttpServer{
 		NewRouter: mux.NewRouter(),
 	}
 	return p
 }
 
 //InitWithEndpoint init with host and port
-func (p *HTTPPlugin) InitWithEndpoint(host string, port string) {
+func (p *HttpServer) InitWithEndpoint(host string, port string) {
 	log.Println("HTTP server initialize")
 
 	p.Host = host
@@ -44,7 +44,7 @@ func (p *HTTPPlugin) InitWithEndpoint(host string, port string) {
 }
 
 //Open open plugin
-func (p *HTTPPlugin) Open() (err error) {
+func (p *HttpServer) Open() (err error) {
 	log.Println("HTTP server start")
 
 	// Run our server in a goroutine so that it doesn't block.
@@ -59,13 +59,13 @@ func (p *HTTPPlugin) Open() (err error) {
 }
 
 //Close close plugin
-func (p *HTTPPlugin) Close() {
+func (p *HttpServer) Close() {
 	p.Server.Close()
 	log.Println("HTTP server closed")
 }
 
 //AddHandler add handler
-func (p *HTTPPlugin) AddHandler(url string, handler HTTPHandler, methods ...string) {
+func (p *HttpServer) AddHandler(url string, handler HTTPHandler, methods ...string) {
 	if len(url) == 0 || handler == nil {
 		return
 	}
@@ -73,6 +73,7 @@ func (p *HTTPPlugin) AddHandler(url string, handler HTTPHandler, methods ...stri
 }
 
 //RegisterHandler register all handler
-func (p *HTTPPlugin) RegisterHandler() {
+func (p *HttpServer) RegisterHandler() {
 	p.AddHandler("/redis_request", RedisRequest, "GET", "POST")
+	p.AddHandler("/eth_extract", ETHExtractHandler, "POST")
 }
