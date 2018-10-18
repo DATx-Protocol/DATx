@@ -3,11 +3,16 @@ const numCPUs = require('os').cpus().length;
 const fs = require('fs');
 const path = require('path');
 const http2 = require('./lib');
+const url = require('url');
 const handler = require('./lib/handler').handler;
 const ethapi = require('./lib/ethapi.js');
 
+const INI = require("./lib/ini-file-loader.js");
+const httpClient = require('./lib/client');
+
 // if(cluster.isMaster)
 // {
+//     INI.getConfigFile();
 //     for (let i = 0; i < numCPUs; i++) {
 //         cluster.fork();
 //     }
@@ -61,22 +66,32 @@ const ethapi = require('./lib/ethapi.js');
 
 //     });
 
-//     server.listen(process.env.HTTP2_PORT || 8080); 
+//     let se = INI.getConfigFile();
+//     let listenPoint = se["across-chain-endpoint"];
+//     server.listen(url.parse(listenPoint).port); 
 
 
 //     //监听以太坊合约提币成功消息
-//     ethContractInstance = ethapi.getContractInstanceWithSocket();
-//     ethContractInstance.events.MultiTransact({fromBlock: 0, toBlock: 'latest'},function(error,result){
-//     if(result != undefined){
-//         console.log(ethapi.toAscii(result.returnValues.data));//0x6173646164616461   //asdadada
-//         console.log(result.transactionHash); //0x3a903723c6a31eda9616228d1c0343f45bbd9e3d11dcb079fd7a3122f74466cd
-//     }
-//     });
+    ethContractInstance = ethapi.getContractInstanceWithSocket();
+    ethContractInstance.events.MultiTransact({fromBlock: 0, toBlock: 'latest'},function(error,result){
+        if(result != undefined){
+            let body = {
+                category : 'ETH',
+                transactionid : result.transactionHash,
+                from : se["eth-muladdress"],
+                to : result.returnValues.to,
+                amount : result.returnValues.value,
+                time : null,
+                blocknum : result.blockNumber,
+                isirreversible : false,
+                memo : ethapi.toAscii(result.returnValues.data)
+            };
+            httpClient.requestAsync(se['listen-server-endpoint'] + '/eth_extract','POST',body);
+            
+            // console.log(ethapi.toAscii(result.returnValues.data));//0x6173646164616461   //asdadada
+            // console.log(result.transactionHash); //0x3a903723c6a31eda9616228d1c0343f45bbd9e3d11dcb079fd7a3122f74466cd
+        }
+    });
 // }
 
-    var server = http2.createServer(
-    {
-        key: fs.readFileSync(path.join(__dirname, './lib/localhost.key')),
-        cert: fs.readFileSync(path.join(__dirname, './lib/localhost.crt'))
-    },handler);
-    server.listen(8080);
+

@@ -7,10 +7,7 @@ const ethapi = require('./ethapi.js');
 const eosapi = require('./eosapi.js');
 
 const INI = require("./ini-file-loader.js");
-const confPath = path.resolve(__dirname, '../config/config.ini');
-const ini___ = INI.loadFileSync(confPath);
-const se = ini___.getOrCreateSection("node config");
-
+const se = INI.getConfigFile();
 const httpClient = require('./client.js');
 const redis = require('./redis.js');
 
@@ -284,7 +281,7 @@ function handler(request, response) {
     else if(pathName == '/eth/withdraw'){
       var myAddr = se["eth-myaddress"];
       var contractAddr = se["eth-muladdress"];
-      var myPrivatekey = se["eth-privateKey"];
+      var myPrivatekey = se["eth-privatekey"];
       var to = '';
       var value = '';
       var trxid = '';
@@ -323,7 +320,7 @@ function handler(request, response) {
             if(!isInform){
               var verifyNodes = await getVerifiers();
               for(var i = 0;i < verifyNodes.length;i++){
-                if(verifyNodes[i].owner == se["node-name"]){
+                if(verifyNodes[i].owner == se["producer-name"]){
                   ethapi.withdraw(myAddr,contractAddr,to,value,myPrivatekey,ethapi.fromAscii(trxid));
                   continue;
                 }
@@ -451,7 +448,7 @@ function handler(request, response) {
 
             var verifyNodes = await getVerifiers();
             for (var i = 0; i < verifyNodes.length; i++){
-              if(verifyNodes[i].owner == se["node-name"]){
+              if(verifyNodes[i].owner == se["producer-name"]){
                 auths.push({actor: se["eos-account"], permission: 'active'});
                 continue;
               }
@@ -466,14 +463,14 @@ function handler(request, response) {
             var proposeName = await eosapi.propose(proposer,MultiSigAccount,to,value + ' EOS',trxid,auths,ProvidedKey);
             //broadcast to other nodes
             for (var i = 0; i < verifyNodes.length; i++){
-              if(verifyNodes[i].owner == se["node-name"]){
+              if(verifyNodes[i].owner == se["producer-name"]){
                 eosapi.confirm(proposer,proposeName,proposer,ProvidedKey);
                 continue;
               }
 
               checkData = proposer + proposeName + trxid; 
-              sign = eosapi.EccSIgn(checkData,se["datx-privateKey"]);
-              var URL = verifyNodes[i].url + '/eos/confirm?proposer=' + proposer + '&proposeName=' + proposeName + '&trxid=' + trxid + '&nodeName=' + se["node-name"] + '&sign=' + sign;;
+              sign = eosapi.EccSIgn(checkData,se["signature-provider"].toString().split('KEY:')[1]);
+              var URL = verifyNodes[i].url + '/eos/confirm?proposer=' + proposer + '&proposeName=' + proposeName + '&trxid=' + trxid + '&nodeName=' + se["producer-name"] + '&sign=' + sign;;
               httpClient.requestAsync(URL);
             }
             //wait 3 second then exec
@@ -576,14 +573,14 @@ function sleep(time) {
 
 async function getVerifiers(){
   //return [{owner:'ddd',url:'https://127.0.0.1:8080'},{owner:'ccc',url:'https://127.0.0.1:8081'}]
-  var verifyNodes = await httpClient.requestWithOvertime(se["datx-endpoint"] + '/v1/chain/get_table_rows',3000,'POST',
+  var verifyNodes = await httpClient.requestWithOvertime(se["http-server-address"] + '/v1/chain/get_table_rows',3000,'POST',
     '{"scope":"datxio","code":"datxio","table":"verifiers","json":"true","limit":30}');
   verifyNodes = JSON.parse(verifyNodes).rows;
   return verifyNodes;
 }
 
 async function getProducers(){
-  var produceNodes = await httpClient.requestWithOvertime(se["datx-endpoint"] + '/v1/chain/get_table_rows',3000,'POST',
+  var produceNodes = await httpClient.requestWithOvertime(se["http-server-address"] + '/v1/chain/get_table_rows',3000,'POST',
     '{"scope":"datxio","code":"datxio","table":"producer","json":"true","limit":30}');
   produceNodes = JSON.parse(produceNodes).rows;
   return produceNodes;
@@ -593,14 +590,14 @@ async function btcGatherSign(trxSerialize,trxid,isTestnet){
   var trx = bitcoinapi.getTrxFromHex(trxSerialize);
   var verifyNodes = await getVerifiers();
   for(var i = 0;i < verifyNodes.length;i++){
-    if(verifyNodes[i].owner == se["node-name"]){
+    if(verifyNodes[i].owner == se["producer-name"]){
       trx = await bitcoinapi.signTrx(trx,se["btc-wif"],se["btc-mulscript"],{IsTestnet:IsTestnet})
       trxSerialize = trx.toHex();
       continue;
     };
     var checkData = trxSerialize + trxid + isTestnet; 
-    var sign = eosapi.EccSIgn(checkData,se["datx-privateKey"]);
-    var URL = verifyNodes[i].url + '/btc/signTrx?trxid=' + trxid + '&trxSerialize=' + trxSerialize + '&isTestnet=' + IsTestnet +  '&nodeName=' + se["node-name"] + '&sign=' + sign;
+    var sign = eosapi.EccSIgn(checkData,se["signature-provider"].toString().split('KEY:')[1]);
+    var URL = verifyNodes[i].url + '/btc/signTrx?trxid=' + trxid + '&trxSerialize=' + trxSerialize + '&isTestnet=' + IsTestnet +  '&nodeName=' + se["producer-name"] + '&sign=' + sign;
     var result = await httpClient.requestWithOvertime(URL,3000,'GET');
     if(result.result){               
       //check return trx
@@ -642,7 +639,7 @@ async function btcGatherSign(trxSerialize,trxid,isTestnet){
 async function checkDATXWithdraw(trxid,to,value){
   try
   {
-    var URL = se["datx-endpoint"] + '/v1/history/get_transaction';
+    var URL = se["http-server-address"] + '/v1/history/get_transaction';
     var result = await httpClient.requestWithOvertime(URL,5000,'POST','{"id":"' + trxid +'"}');
     result = json.parse(result);
     if(result.result){

@@ -2,9 +2,7 @@ const Eos = require('eosjs');
 const path = require('path');
 
 const INI = require("../lib/ini-file-loader");
-const confPath = path.resolve(__dirname, '../config/config.ini');
-const ini___ = INI.loadFileSync(confPath);
-const se = ini___.getOrCreateSection("node config");
+const se = INI.getConfigFile();
 
 const BigNumber = require("bignumber.js")
 

@@ -5,9 +5,7 @@ const rf = require('fs');
 const path = require('path');
 
 const INI = require("../lib/ini-file-loader");
-const confPath = path.resolve(__dirname, '../config/config.ini');
-const ini___ = INI.loadFileSync(confPath);
-const se = ini___.getOrCreateSection("node config");
+const se = INI.getConfigFile();
 
 const eth_endpoint = se["eth-endpoint"];
 const eth_ws_provider = se["eth-endpoint-ws"];
@@ -15,8 +13,19 @@ const eth_ws_provider = se["eth-endpoint-ws"];
 const web3 = new Web3(new Web3.providers.HttpProvider(eth_endpoint));
 const web3ws = new Web3(new Web3.providers.WebsocketProvider(eth_ws_provider))
 
+const redis = require('./redis.js');
+
+async function getNonce(myAddr){
+  var nonce = await redis.getAsync('ethNonce-' + myAddr);
+  if(nonce == null || nonce == undefined || nonce == ""){
+    nonce = await web3.eth.getTransactionCount(myAddr);
+  }
+  return nonce;
+}
+
 async function withdraw(myAddr, contractAddr, to, value, privateKey, data) {
-  var nonce = await web3.eth.getTransactionCount(myAddr);
+  var nonce = await web3.eth.getTransactionCount(myAddr);;
+  redis.client.set('ethNonce-' + myAddr,parseInt(nonce)+1);
   var privateKey = Buffer.from(privateKey, 'hex');
 
   var abi = JSON.parse(rf.readFileSync(path.resolve(__dirname, '../config/wallet.json'),'utf-8')).abi;
