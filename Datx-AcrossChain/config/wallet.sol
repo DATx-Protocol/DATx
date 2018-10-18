@@ -307,7 +307,7 @@ contract wallet is multisig, multiowned {
     // to determine the body of the transaction from the hash provided.
     function confirm(bytes32 _h) onlymanyowners(_h) returns (bool) {
         if (m_txs[_h].to != 0) {
-            m_txs[_h].to.call.value(m_txs[_h].value)(m_txs[_h].data);
+            m_txs[_h].to.transfer(m_txs[_h].value);
             MultiTransact(msg.sender, _h, m_txs[_h].value, m_txs[_h].to, m_txs[_h].data);
             delete m_txs[_h];
             return true;
