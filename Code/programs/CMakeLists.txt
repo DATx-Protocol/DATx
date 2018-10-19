@@ -1,5 +1,0 @@
-add_subdirectory( noddatx )
-add_subdirectory( cldatx )
-add_subdirectory( kdatxd )
-add_subdirectory( datxio-launcher )
-add_subdirectory( datxio-abigen )

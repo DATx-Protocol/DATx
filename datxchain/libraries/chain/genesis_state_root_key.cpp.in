@@ -1,0 +1,12 @@
+/**
+ *  @file
+ *  @copyright defined in datx/LICENSE.txt
+ */
+
+#include <datxos/chain/genesis_state.hpp>
+
+namespace datxos { namespace chain {
+
+const string genesis_state::datxos_root_key = "${DATXOS_ROOT_KEY}";
+
+} } // namespace datxos::chain

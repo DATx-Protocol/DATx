@@ -1,0 +1,40 @@
+{
+  "name": "mse",
+  "version": "1.0.0",
+  "description": "datx across chain accessory implementation",
+  "main": "lib/index.js",
+  "engines": {
+    "node": ">=0.12.0"
+  },
+  "devDependencies": {
+    "bunyan": "^2.0.2",
+    "chai": "^4.1.2",
+    "docco": "^0.7.0",
+    "istanbul": "^0.4.5",
+    "jshint": "^2.9.5",
+    "mocha": "^4.0.1",
+    "websocket-stream": "^5.0.1"
+  },
+  "scripts": {
+    "lint": "jshint",
+    "pretest": "npm run lint",
+    "test": "istanbul test node_modules/mocha/bin/_mocha -- --reporter spec --slow 500 --timeout 15000 --exit",
+    "doc": "docco lib/* --output doc --layout parallel --template root.jst --css doc/docco.css && docco lib/protocol/* --output doc/protocol --layout parallel --template protocol.jst --css doc/docco.css"
+  },
+  "license": "MIT",
+  "readmeFilename": "README.md",
+  "dependencies": {
+    "bignumber.js": "^7.2.1",
+    "bitcoinjs-lib": "^4.0.1",
+    "blockchain.info": "^2.12.1",
+    "eosjs": "^16.0.6",
+    "ethereumjs-tx": "^1.3.7",
+    "object-keys": "^1.0.11",
+    "object.assign": "^4.0.4",
+    "pako": "1.0.6",
+    "setimmediate": "^1.0.5",
+    "web3": "^1.0.0-beta.36",
+    "request": "^2.88.0",
+    "redis": "^2.8.0"
+  }
+}
