@@ -43,16 +43,13 @@ sed -i 's/daemonize no/daemonize yes/' /app/redis/etc/redis.conf
 
 sed -i 's=pidfile /var/run/redis.pid=pidfile /app/redis/redis.pid=' /app/redis/etc/redis.conf
 
-echo "start redis"
+# echo "start redis"
 
-/app/redis/bin/redis-server /app/redis/etc/redis.conf
+# /app/redis/bin/redis-server /app/redis/etc/redis.conf
 
-echo "open firewall ports"
 
-iptables -I INPUT -p tcp --dport 6379 -j ACCEPT
+# echo "set startup"
 
-echo "set startup"
-
-echo "/app/redis/bin/redis-server /app/redis/etc/redis.conf" >> /etc/rc.local
+# echo "/app/redis/bin/redis-server /app/redis/etc/redis.conf" >> /etc/rc.local
 
 echo "redis install success，port:6379，installation directory: /app/redis/"

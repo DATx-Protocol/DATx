@@ -5,6 +5,9 @@ targetDir="bin"
 pwd=`pwd`
 targetFile=`basename $pwd`
 
+rm -rf ./build/*
+rm -rf ./bin/*
+
 datxDir="${pwd}/build/src/datx/${targetFile}"
 mkdir -p $datxDir
 
