@@ -14,9 +14,6 @@
         },{
           "name": "datxaddress",
           "type": "name"
-        },{
-          "name": "address",
-          "type": "string"
         }
       ]
     },{
@@ -112,30 +109,9 @@
         },{
           "name": "trxid",
           "type": "string"
-        },{
-          "name": "from",
-          "type": "string"
-        },{
-          "name": "to",
-          "type": "string"
-        },{
-          "name": "blocknum",
-          "type": "int64"
-        },{
-          "name": "quantity",
-          "type": "string"
-        },{
-          "name": "category",
-          "type": "string"
-        },{
-          "name": "memo",
-          "type": "string"
-        },{
+        }{
           "name": "data",
           "type": "checksum256"
-        },{
-          "name": "producers",
-          "type": "name[]"
         }
       ]
     },{

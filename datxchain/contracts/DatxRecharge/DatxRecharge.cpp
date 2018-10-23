@@ -36,7 +36,6 @@ void recharge::recorduser(account_name datxaddress,string address,account_name b
             u.id= users_table.available_primary_key();
             u.hash = adrhash;
             u.datxaddress=datxaddress;
-            u.address=address;
         });    
 }
 /// @abi action
@@ -47,6 +46,7 @@ void recharge::charge(account_name bpname,string hash,string from,string to,int6
         account_name producers[21]; 
         uint32_t bytes_populated = get_active_producers(producers, sizeof(account_name)*21); 
         bool Isproducer = false; 
+        int psize = sizeof(producers)/sizeof(account_name)*2/3+1;
         for (int i = 0; i < sizeof(producers)/sizeof(account_name) ;i++){ 
              if(producers[i] == bpname) 
              Isproducer = true; 
@@ -105,7 +105,7 @@ void recharge::charge(account_name bpname,string hash,string from,string to,int6
 
         //check producer whether more than 15
         int size =(int)itr->producers.size();
-        if(size<5)
+        if(size<psize)
         {
             auto itr3 = std::find( itr->producers.cbegin(), itr->producers.cend(), bpname );
             datxos_assert(itr3 == itr->producers.end(), "This producer already initiated a request for this transaction!");  
@@ -163,12 +163,6 @@ void recharge::charge(account_name bpname,string hash,string from,string to,int6
             {
                 s.id= success_table.available_primary_key();
                 s.trxid= hash;
-                s.from = from;
-                s.to = to;
-                s.blocknum= blocknum;
-                s.quantity=quantity;
-                s.category=category;
-                s.memo = memo;
                 s.data=calc_hash; 
             });   
 
@@ -192,13 +186,16 @@ void recharge::charge(account_name bpname,string hash,string from,string to,int6
 //get the expired transaction from record
 void recharge::expired_trx()
 {
+    account_name producers[21];
+    uint32_t bytes_populated = get_active_producers(producers, sizeof(account_name)*21);      
+    int psize = sizeof(producers)/sizeof(account_name)*2/3+1;
     records trans_table(_self,_self);
     int count = 0;
     for ( auto it = trans_table.begin(); it != trans_table.end() && count<100;)
     { 
         countrecords count_table(_self,_self);
         uint64_t subtime = now() - it->start_time;
-        if(it->producers.size() < 15&&subtime > 5*63)
+        if(it->producers.size() < psize&&subtime > 5*63)
         {
             expirations expire_table(_self,_self);
             auto idx = expire_table.template get_index<N(data)>();

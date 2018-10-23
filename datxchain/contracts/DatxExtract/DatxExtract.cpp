@@ -104,7 +104,12 @@ namespace datxos
                                               {
                                                 p.verifiers.push_back(verifier);
                                               });
-        if(itr->verifiers.size() > 15){
+        
+        account_name producers[21];
+        uint32_t bytes_populated = get_active_producers(producers, sizeof(account_name)*21);      
+        int psize = sizeof(producers)/sizeof(account_name)*2/3+1;
+
+        if(itr->verifiers.size() > psize){
             trans_table.modify(*itr, get_self(), [&](auto& p)
                                               {
                                                 p.countdown_time = now();
@@ -122,6 +127,7 @@ namespace datxos
 
         account_name producers[21]; 
         uint32_t bytes_populated = get_active_producers(producers, sizeof(account_name)*21); 
+        int psize = sizeof(producers)/sizeof(account_name)*2/3+1;
         bool Isproducer = false; 
         for (int i = 0; i < sizeof(producers)/sizeof(account_name) ;i++){ 
              if(producers[i] == producer) 
@@ -140,7 +146,7 @@ namespace datxos
                                                 p.successconfirm.push_back(producer);
                                               });
         
-        if (itr -> successconfirm.size() > 15) {
+        if (itr -> successconfirm.size() > psize) {
             successtrxs success_table(_self,_self);
             success_table.emplace(_self, [&](auto &s) {
                 s.id= success_table.available_primary_key();
@@ -156,6 +162,9 @@ namespace datxos
 
     /// @abi action
     void extract::updateexpire(){
+        account_name producers[21];
+        uint32_t bytes_populated = get_active_producers(producers, sizeof(account_name)*21);      
+        int psize = sizeof(producers)/sizeof(account_name)*2/3+1;
         records trans_table(_self,_self);
         auto idx = trans_table.template get_index<N(start_time)>();
         int count = 0;
@@ -164,7 +173,7 @@ namespace datxos
             if(subtime <= 5 * 60){
                 break;
             }
-            if(it->verifiers.size() < 15){
+            if(it->verifiers.size() < psize){
                 expirations expire_table(_self,_self);
                 expire_table.emplace(_self, [&](auto &s) {
                     s.id= expire_table.available_primary_key();
@@ -204,7 +213,7 @@ namespace datxos
 
                 // pay the cost
                 action(permission_level{ _self, N(active) },
-                    N(eosio.token), N(transfer),
+                    N(datxos.dtoke), N(extract),
                     std::make_tuple(N(datxos.recharge),itr0 -> account, itr0 -> quantity, std::string(""))
                 ).send();
 

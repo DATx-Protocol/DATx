@@ -39,12 +39,11 @@ class recharge : public contract
        uint64_t id; //primary key
        checksum256 hash;
         account_name datxaddress; 
-        string address;
         
         uint64_t primary_key() const { return id; }
         key256 by_hash() const {return get_hash(hash);}
         
-        DATXLIB_SERIALIZE(user, (id)(hash)(datxaddress)(address));
+        DATXLIB_SERIALIZE(user, (id)(hash)(datxaddress));
      };
 
     typedef multi_index<N(user), user,
@@ -104,7 +103,7 @@ class recharge : public contract
         checksum256 data;
         uint64_t primary_key() const { return id; }
         key256 by_data() const {return get_hash(data);}
-        DATXLIB_SERIALIZE(expiration, (id)(trxid)(from)(to)(blocknum)(quantity)(category)(memo));
+        DATXLIB_SERIALIZE(expiration, (id)(trxid)(from)(to)(blocknum)(quantity)(category)(memo)(data));
     };
 
     typedef multi_index<N(expiration), expiration,
@@ -116,17 +115,10 @@ class recharge : public contract
     {
         uint64_t id; //primary key
         string trxid;
-        string from;
-        string to;
-        int64_t blocknum;
-        string quantity;
-        string category;
-        string memo;
         checksum256 data;
-        std::vector<account_name> producers;
         uint64_t primary_key() const { return id; }
         key256 by_data() const {return get_hash(data);}
-        DATXLIB_SERIALIZE(perfection, (id)(trxid)(from)(to)(blocknum)(quantity)(category)(memo)(data)(producers));
+        DATXLIB_SERIALIZE(perfection, (id)(trxid)(data));
     };
 
     typedef multi_index<N(perfection), perfection,
