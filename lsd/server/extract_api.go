@@ -66,7 +66,7 @@ func (ext *Extract) Close() {
 
 func (ext *Extract) getExpiredTrxs() ([]chainlib.Transaction, error) {
 	//get expired trx from extract smart contract table
-	raw, err := GetOuterTrxTable("user", "user", "expiration")
+	raw, err := GetOuterTrxTable("datxos.extra", "datxos.extra", "expiration")
 
 	var temp ExpirationTable
 	err = json.Unmarshal(raw, &temp)

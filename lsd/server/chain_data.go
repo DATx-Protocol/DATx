@@ -281,3 +281,35 @@ type Transaction struct {
 		} `json:"inline_traces"`
 	} `json:"traces"`
 }
+
+//SystemProducers ...
+type SystemProducers struct {
+	Rows []struct {
+		Owner         string `json:"owner"`
+		TotalVotes    string `json:"total_votes"`
+		ProducerKey   string `json:"producer_key"`
+		IsActive      int    `json:"is_active"`
+		URL           string `json:"url"`
+		UnpaidBlocks  int    `json:"unpaid_blocks"`
+		LastClaimTime int    `json:"last_claim_time"`
+		Location      int    `json:"location"`
+	} `json:"rows"`
+	TotalProducerVoteWeight string `json:"total_producer_vote_weight"`
+	More                    string `json:"more"`
+}
+
+//ChargeExpirationTable ...
+type ChargeExpirationTable struct {
+	Rows []struct {
+		ID       int    `json:"id"`
+		Trxid    string `json:"trxid"`
+		From     string `json:"from"`
+		To       string `json:"to"`
+		BlockNum int64  `json:"blocknum"`
+		Quantity string `json:"quantity"`
+		Category string `json:"category"`
+		Memo     string `json:"memo"`
+		Data     int    `json:"data"`
+	} `json:"rows"`
+	More bool `json:"more"`
+}

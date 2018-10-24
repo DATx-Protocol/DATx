@@ -3,7 +3,10 @@ package main
 import (
 	"datx/lsd/chainlib"
 	"datx/lsd/explorer"
+	"encoding/json"
+	"fmt"
 	"net/http"
+	"strings"
 
 	"github.com/gin-gonic/gin"
 )
@@ -22,11 +25,19 @@ func jsonBindingError(ctx *gin.Context) {
 }
 
 func explorerError(ctx *gin.Context, err error) {
-	ctx.JSON(400, gin.H{
-		"code":    500,
-		"message": err.Error(),
-		"data":    nil,
-	})
+	if strings.Contains(err.Error(), "not found") {
+		ctx.JSON(200, gin.H{
+			"code":    200,
+			"message": err.Error(),
+			"data":    nil,
+		})
+	} else {
+		ctx.JSON(500, gin.H{
+			"code":    500,
+			"message": err.Error(),
+			"data":    nil,
+		})
+	}
 }
 
 func postTokenBalance(ctx *gin.Context) {
@@ -168,5 +179,41 @@ func postAddressMap(ctx *gin.Context) {
 		"code":    200,
 		"message": "OK",
 		"data":    TrxResult{trxID},
+	})
+}
+
+// AccountsResult ...
+type AccountsResult struct {
+	Names []string `json:"account_names"`
+}
+
+func postGetAccounts(ctx *gin.Context) {
+	var request explorer.SignupPKRequest
+	err := ctx.BindJSON(&request)
+	if err != nil {
+		jsonBindingError(ctx)
+		return
+	}
+
+	outStr, err := explorer.ClGetAccounts(request.PublicKey)
+	if err != nil {
+		if strings.Contains(err.Error(), "Invalid public key") {
+			explorerError(ctx, fmt.Errorf("public_key not found"))
+		} else {
+			explorerError(ctx, err)
+		}
+		return
+	}
+
+	names := &AccountsResult{}
+	if err := json.Unmarshal([]byte(outStr), &names); err != nil {
+		explorerError(ctx, fmt.Errorf("datx get_actions unmarshal error %v", outStr))
+		return
+	}
+
+	ctx.JSON(http.StatusOK, gin.H{
+		"code":    200,
+		"message": "OK",
+		"data":    names,
 	})
 }

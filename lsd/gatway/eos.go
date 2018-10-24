@@ -7,7 +7,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
-	"log"
 	"net/http"
 	"strconv"
 	"strings"
@@ -393,13 +392,24 @@ func (eos *EOSBrowser) Tick() {
 	for _, trx := range trxs {
 		if trx.IsIrrevisible {
 			// fmt.Printf("eos trx is irreversible: %v\n", trx.TransactionID)
+
+			var result error
 			if trx.To == eos.tickAccount {
-				eos.pushCharge(trx)
+				result = chainlib.PushCharge(trx)
 			} else if trx.From == eos.tickAccount {
-				eos.pushExtract(trx)
-			} else {
-				continue
+				result = chainlib.PushExtract(trx)
 			}
+
+			if result != nil {
+				jobid := trx.Category + "_" + trx.TransactionID
+				if job, _ := delayqueue.Get(jobid); job != nil {
+					continue
+				}
+
+				fmt.Printf("BTC push action faile and retry on Tick(): %v  %v\n", trx.TransactionID, time.Now().Unix())
+				eos.tick.AddTask(trx, EOSDelaySeconds)
+			}
+
 		} else {
 			jobid := trx.Category + "_" + trx.TransactionID
 			if job, _ := delayqueue.Get(jobid); job != nil {
@@ -424,9 +434,9 @@ func (eos *EOSBrowser) ReTry(trx chainlib.Transaction) bool {
 	}
 
 	if trx.To == eos.tickAccount {
-		eos.pushCharge(trx)
+		chainlib.PushCharge(trx)
 	} else if trx.From == eos.tickAccount {
-		eos.pushExtract(trx)
+		chainlib.PushExtract(trx)
 	} else {
 		return false
 	}
@@ -437,47 +447,4 @@ func (eos *EOSBrowser) ReTry(trx chainlib.Transaction) bool {
 //Close ...
 func (eos *EOSBrowser) Close() {
 	eos.close <- true
-}
-
-//pushCharge push charge action to blockchain
-func (eos *EOSBrowser) pushCharge(trx chainlib.Transaction) error {
-	//exec push action
-	var charge chainlib.ChargeInfo
-	charge.BPName = chainlib.GetCfgProducerName()
-	charge.Hash = trx.TransactionID
-	charge.From = trx.From
-	charge.To = trx.To
-	charge.BlockNum = trx.BlockNum
-	charge.Quantity = strconv.FormatFloat(trx.Amount, 'f', 4, 64)
-	charge.Category = trx.Category
-	charge.Memo = trx.Memo
-
-	// push charge action
-	_, err := chainlib.ClPushCharge("datxos.charg", "charge", charge)
-	if err != nil {
-		fmt.Printf("EOS push charge err: %v\n", err)
-		return err
-	}
-
-	return nil
-}
-
-//pushExtract push extract action to blockchain
-func (eos *EOSBrowser) pushExtract(trx chainlib.Transaction) error {
-	var extract chainlib.ExtractInfo
-	extract.TrxID = trx.Memo
-	extract.Producer = chainlib.GetCfgProducerName()
-
-	bytes, err := json.Marshal(extract)
-	if err != nil {
-		log.Printf("pushExtract marshal failed:%v %v\n", trx, err)
-		return err
-	}
-	_, err = chainlib.ClPushAction("datxos.extra", "setsuccess", string(bytes), extract.Producer)
-	if err != nil {
-		log.Printf("Extract push action setsuccess failed:%v %v\n", trx, err)
-		return err
-	}
-
-	return nil
 }

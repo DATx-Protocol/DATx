@@ -3,9 +3,11 @@ package chainlib
 import (
 	"bytes"
 	"crypto/sha256"
+	"datx/lsd/common"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"log"
 	"math/rand"
 	"os/exec"
 	"strconv"
@@ -142,7 +144,7 @@ func ClPushAction(account, action, data, permission string) (string, error) {
 func ClPushTransfer(account string, action string, trans TransferInfo) (string, error) {
 	//Ensure that your wallet is unlocked before using it!
 	js, _ := json.Marshal(trans)
-	transStr := "'" + string(js) + "'"
+	transStr := string(js)
 	outStr, err := ClPushAction(account, action, transStr, account)
 	if err != nil {
 		return "", err
@@ -159,7 +161,7 @@ func ClPushTransfer(account string, action string, trans TransferInfo) (string, 
 func ClPushCharge(account string, action string, charge ChargeInfo) (string, error) {
 	//Ensure that your wallet is unlocked before using it!
 	js, _ := json.Marshal(charge)
-	chargeStr := "'" + string(js) + "'"
+	chargeStr := string(js)
 	outStr, err := ClPushAction(account, action, chargeStr, charge.BPName)
 	if err != nil {
 		return "", err
@@ -227,4 +229,45 @@ func ClWaitIrreversible(blockNum int64) error {
 		}
 		time.Sleep(time.Duration(1) * time.Second) // 否则等待1秒
 	}
+}
+
+//PushCharge push charge action to blockchain
+func PushCharge(trx Transaction) error {
+	var charge ChargeInfo
+	charge.BPName = common.GetCfgProducerName()
+	charge.Hash = trx.TransactionID
+	charge.From = trx.From
+	charge.To = trx.To
+	charge.BlockNum = trx.BlockNum
+	charge.Quantity = strconv.FormatFloat(trx.Amount, 'f', 4, 64)
+	charge.Category = trx.Category
+	charge.Memo = trx.Memo
+
+	_, err := ClPushCharge("datxos.charg", "charge", charge)
+	if err != nil {
+		fmt.Printf("PushCharge err: %v %v\n:", trx, err)
+		return err
+	}
+
+	return nil
+}
+
+//PushExtract push extract action to blockchain
+func PushExtract(trx Transaction) error {
+	var extract ExtractInfo
+	extract.TrxID = trx.Memo
+	extract.Producer = common.GetCfgProducerName()
+
+	bytes, err := json.Marshal(extract)
+	if err != nil {
+		log.Printf("PushExtract marshal failed:%v %v\n", trx, err)
+		return err
+	}
+	_, err = ClPushAction("datxos.extra", "setsuccess", string(bytes), extract.Producer)
+	if err != nil {
+		log.Printf("PushExtract push action setsuccess failed:%v %v\n", trx, err)
+		return err
+	}
+
+	return nil
 }

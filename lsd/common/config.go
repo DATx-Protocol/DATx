@@ -1,4 +1,4 @@
-package chainlib
+package common
 
 import (
 	"fmt"
@@ -14,10 +14,10 @@ func GetConfig() (*ini.File, error) {
 	var cfg *ini.File
 	var err error
 	if runtime.GOOS == "linux" {
-		fmt.Println("Unix/Linux type OS detected")
+		// fmt.Println("Unix/Linux type OS detected")
 		cfg, err = ini.Load(os.Getenv("HOME") + "/.local/share/datxos/noddatx/config/config.ini")
 	} else if runtime.GOOS == "darwin" {
-		fmt.Println("Mac OS detected")
+		// fmt.Println("Mac OS detected")
 		cfg, err = ini.Load(os.Getenv("HOME") + "/Library/Application Support/datxos/noddatx/config/config.ini")
 	} else {
 		return nil, fmt.Errorf("%s detected,not support", runtime.GOOS)

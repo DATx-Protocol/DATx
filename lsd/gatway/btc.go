@@ -9,12 +9,12 @@ import (
 	"io/ioutil"
 	"log"
 	"net/http"
-	"strconv"
 	"strings"
 	"time"
 )
 
 const (
+	BTCRetrySeconds    int64 = 1
 	BTCDelaySeconds    int64 = 60
 	BTCIrreversibleCnt int64 = 6
 )
@@ -141,7 +141,7 @@ func (btc *BTCBrowser) GetTrxs(addr string) ([]chainlib.Transaction, error) {
 	result := make([]chainlib.Transaction, 0)
 	for _, v := range resp.Txs {
 
-		if int64(v.BlockHeight) < btc.handleHeight {
+		if int64(v.BlockHeight) <= btc.handleHeight {
 			continue
 		}
 
@@ -243,15 +243,25 @@ func (btc *BTCBrowser) Tick() {
 				fmt.Printf("trx btc from: %v  %v\n", trx.TransactionID, btc.handleHeight)
 			}
 
+			var result error
 			if trx.To != "" {
-				btc.pushCharge(trx)
+				result = chainlib.PushCharge(trx)
 			} else {
-				btc.pushExtract(trx)
+				result = btc.pushExtract(trx)
+			}
+
+			if result != nil {
+				jobid := trx.Category + "_" + trx.TransactionID
+				if job, _ := delayqueue.Get(jobid); job != nil {
+					continue
+				}
+
+				fmt.Printf("BTC push action faile and retry on Tick(): %v  %v\n", trx.TransactionID, time.Now().Unix())
+				btc.tick.AddTask(trx, BTCRetrySeconds)
 			}
 		} else {
 			jobid := trx.Category + "_" + trx.TransactionID
 			if job, _ := delayqueue.Get(jobid); job != nil {
-				fmt.Printf("BTC trx is existed: %v\n", trx.TransactionID)
 				continue
 			}
 
@@ -273,7 +283,7 @@ func (btc *BTCBrowser) ReTry(trx chainlib.Transaction) bool {
 	}
 
 	if trx.To != "" {
-		btc.pushCharge(trx)
+		chainlib.PushCharge(trx)
 	} else {
 		btc.pushExtract(trx)
 	}
@@ -284,26 +294,6 @@ func (btc *BTCBrowser) ReTry(trx chainlib.Transaction) bool {
 //Close ...
 func (btc *BTCBrowser) Close() {
 	btc.close <- true
-}
-
-func (btc *BTCBrowser) pushCharge(trx chainlib.Transaction) error {
-	var charge chainlib.ChargeInfo
-	charge.BPName = chainlib.GetCfgProducerName()
-	charge.Hash = trx.TransactionID
-	charge.From = trx.From
-	charge.To = trx.To
-	charge.BlockNum = trx.BlockNum
-	charge.Quantity = strconv.FormatFloat(trx.Amount, 'f', 4, 64)
-	charge.Category = trx.Category
-	charge.Memo = trx.Memo
-
-	_, err := chainlib.ClPushCharge("datxos.charg", "charge", charge)
-	if err != nil {
-		fmt.Printf("BTC push charge err:%v\n", err)
-		return err
-	}
-
-	return nil
 }
 
 func (btc *BTCBrowser) pushExtract(trx chainlib.Transaction) error {
@@ -329,20 +319,6 @@ func (btc *BTCBrowser) pushExtract(trx chainlib.Transaction) error {
 	trxid := string(body)
 	log.Printf("get trx id from script:%v\n", trxid)
 
-	var extract chainlib.ExtractInfo
-	extract.TrxID = trxid
-	extract.Producer = chainlib.GetCfgProducerName()
-
-	bytes, err := json.Marshal(extract)
-	if err != nil {
-		log.Printf("pushExtract marshal failed:%v %v\n", trx, err)
-		return err
-	}
-	_, err = chainlib.ClPushAction("datxos.extra", "setsuccess", string(bytes), extract.Producer)
-	if err != nil {
-		log.Printf("Extract push action setsuccess failed:%v %v\n", trx, err)
-		return err
-	}
-
-	return nil
+	trx.Memo = trxid
+	return chainlib.PushExtract(trx)
 }

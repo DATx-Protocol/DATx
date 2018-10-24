@@ -1,7 +1,7 @@
 package main
 
 import (
-	"datx/lsd/chainlib"
+	"datx/lsd/common"
 	"datx/lsd/delayqueue"
 	"datx/lsd/gatway"
 	"datx/lsd/http"
@@ -36,17 +36,17 @@ func main() {
 	chainserver.Start()
 	defer chainserver.Close()
 
-	ethAccount := chainlib.GetTrusteeAccount("eth-muladdress")
+	ethAccount := common.GetTrusteeAccount("eth-muladdress")
 	log.Printf("main get eth trustee account: %s\n", ethAccount)
 	eth := gatway.NewETHBrowser(ethAccount, chainserver)
 	chainserver.AddBrowser("ETH", eth)
 
-	btcAccount := chainlib.GetTrusteeAccount("btc-muladdress")
+	btcAccount := common.GetTrusteeAccount("btc-muladdress")
 	log.Printf("main get btc trustee account: %s\n", btcAccount)
 	btc := gatway.NewBTCBrowser(btcAccount, chainserver)
 	chainserver.AddBrowser("BTC", btc)
 
-	eosAccount := chainlib.GetTrusteeAccount("eos-muladdress")
+	eosAccount := common.GetTrusteeAccount("eos-muladdress")
 	log.Printf("main get eos trustee account: %s\n", eosAccount)
 	eos := gatway.NewEOSBrowser(eosAccount, chainserver)
 	chainserver.AddBrowser("EOS", eos)

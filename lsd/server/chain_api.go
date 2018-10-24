@@ -3,6 +3,7 @@ package server
 import (
 	"bytes"
 	"datx/lsd/chainlib"
+	"datx/lsd/common"
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
@@ -152,24 +153,23 @@ func GetInfo() (*ChainInfo, error) {
 }
 
 func IsCurrentProducer() bool {
-	localProducerName := chainlib.GetCfgProducerName()
+	localProducerName := common.GetCfgProducerName()
 
-	info, err := GetInfo()
+	commondstr := fmt.Sprint("cldatx system listproducers -l 21 -j")
+	result, err := chainlib.ExecShell(commondstr)
 	if err != nil {
-		fmt.Printf("Get info err:%v\n", err)
 		return false
 	}
 
-	headProducerName := info.HeadBlockProducer
-
-	// commondstr := fmt.Sprint("cldatx system listproducers -l 21")
-	// _, err := chainlib.ExecShell(commondstr)
-	// if err != nil {
-	// 	return false
-	// }
-
-	if localProducerName == headProducerName {
-		return true
+	var prods SystemProducers
+	err = json.Unmarshal([]byte(result), &prods)
+	if err != nil {
+		return false
+	}
+	for _, v := range prods.Rows {
+		if v.Owner == localProducerName {
+			return true
+		}
 	}
 
 	return false
