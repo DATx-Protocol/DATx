@@ -1,4 +1,3 @@
-const path = require('path');
 const url = require('url');
 const querystring = require('querystring');
 
@@ -125,17 +124,20 @@ function handler(request, response) {
         else{
           (async function(){
           try{ 
-            // var checkData = to + value + fee + trxid + isTestnet ;
-            // var checkResult = await checkRequestSIgn(nodeName,sign,checkData);
-            // if(!checkResult){
-            //   throw new Error('invalid sign');
-            // }
-            // checkResult = await checkDATXWithdraw(trxid,to,value + ' DBTC')
-            // if(!checkResult){
-            //   throw new Error('invalid trx id');
-            // }
+            var checkData = to + value + fee + trxid + isTestnet ;
+            var checkResult = await checkRequestSIgn(nodeName,sign,checkData);
+            if(!checkResult){
+              throw new Error('invalid sign');
+            }
+            checkResult = await checkDATXWithdraw(trxid,to,value + ' DBTC')
+            if(!checkResult){
+              throw new Error('transcation rejected');
+            }
             //check 提币权
-
+            checkResult = await checkExtractRight(nodeName,trxid);
+            if(!checkResult){
+              throw new Error('Extract rejected');
+            }
 
             //buildTrx
             var trx = await bitcoinapi.buildTrx(se["btc-muladdress"],to,parseInt(value * 1e8),fee,{IsTestnet:IsTestnet},trxid); 
@@ -184,11 +186,17 @@ function handler(request, response) {
         else{
           (async function(){
           try{
-            // var checkData = trxSerialize + trxid + isTestnet; 
-            // var checkResult = await checkRequestSIgn(nodeName,sign,checkData);
-            // if(!checkResult){
-            //   throw new Error('invalid sign');
-            // }
+            var checkData = trxSerialize + trxid + isTestnet; 
+            var checkResult = await checkRequestSIgn(nodeName,sign,checkData);
+            if(!checkResult){
+              throw new Error('invalid sign');
+            }
+
+            //check 提币权
+            checkResult = await checkExtractRight(nodeName,trxid);
+            if(!checkResult){
+              throw new Error('Extract rejected');
+            }
 
             var recordTrxSerialize = await redis.getAsync(trxid);
             var trx = bitcoinapi.getTrxFromHex(trxSerialize);
@@ -217,8 +225,8 @@ function handler(request, response) {
               var fee = sum - outs[0].satoshi - outs[1].satoshi;
               var value = outs[0].satoshi;
               if(fee > Number(se["btc-maxfee"])) throw new Error('transcation rejected');
-              // checkResult = await checkDATXWithdraw(trxid,to,parseFloat((value+fee)/1e8).toFixed(4) + ' DBTC');
-              // if(!checkResult)  throw new Error('transcation rejected');
+              checkResult = await checkDATXWithdraw(trxid,to,parseFloat((value+fee)/1e8).toFixed(4) + ' DBTC');
+              if(!checkResult)  throw new Error('transcation rejected');
             }
             else{
               isFirst = false;
@@ -304,17 +312,23 @@ function handler(request, response) {
           (async function(){
           try{
             //do some check
-            // var checkData = to + value + trxid;
-            // var checkResult = await checkRequestSIgn(nodeName,sign,checkData);
-            // if(!checkResult){
-            //   throw new Error('invalid sign');
-            // }
-            // if(await redis.getAsync(trxid) == "done"){
-            //   throw new Error('handled trx id');
-            // }
+            var checkData = to + value + trxid;
+            var checkResult = await checkRequestSIgn(nodeName,sign,checkData);
+            if(!checkResult){
+              throw new Error('invalid sign');
+            }
+            if(await redis.getAsync(trxid) == "done"){
+              throw new Error('handled trx id');
+            }
 
-            // checkResult = await checkDATXWithdraw(trxid,to,value + ' DETH')
-            // if(!checkResult)  throw new Error('transcation rejected');
+            checkResult = await checkDATXWithdraw(trxid,to,value + ' DETH')
+            if(!checkResult)  throw new Error('transcation rejected');
+
+            //check 提币权
+            checkResult = await checkExtractRight(nodeName,trxid);
+            if(!checkResult){
+              throw new Error('Extract rejected');
+            }
 
             //通知其他节点configm
             if(!isInform){
@@ -433,14 +447,20 @@ function handler(request, response) {
         else{
           (async function(){
           try{
-            //chenck 
-            // var checkData = to + value + trxid;
-            // var checkResult = await checkRequestSIgn(nodeName,sign,checkData);
-            // if(!checkResult){
-            //   throw new Error('invalid sign');
-            // }
-            // checkResult = await checkDATXWithdraw(trxid,to,value + ' DEOS')
-            // if(!checkResult)  throw new Error('transcation rejected');
+            //check 
+            var checkData = to + value + trxid;
+            var checkResult = await checkRequestSIgn(nodeName,sign,checkData);
+            if(!checkResult){
+              throw new Error('invalid sign');
+            }
+            checkResult = await checkDATXWithdraw(trxid,to,value + ' DEOS')
+            if(!checkResult)  throw new Error('transcation rejected');
+
+            //check 提币权
+            checkResult = await checkExtractRight(nodeName,trxid);
+            if(!checkResult){
+              throw new Error('Extract rejected');
+            }
 
             if(await redis.getAsync(trxid) == "done"){
               throw new Error('handled trx id');
@@ -520,14 +540,20 @@ function handler(request, response) {
           (async function(){
           try{
             //do some check
-            // checkData = proposer + proposeName + trxid; 
-            // checkResult = await checkRequestSIgn(nodeName,sign,checkData);
-            // if(!checkResult){
-            //   throw new Error('invalid sign');
-            // }
-            // if(await redis.getAsync(trxid) == "done"){
-            //   throw new Error('handled trx id');
-            // }
+            checkData = proposer + proposeName + trxid; 
+            checkResult = await checkRequestSIgn(nodeName,sign,checkData);
+            if(!checkResult){
+              throw new Error('invalid sign');
+            }
+            if(await redis.getAsync(trxid) == "done"){
+              throw new Error('handled trx id');
+            }
+
+            //check 提币权
+            checkResult = await checkExtractRight(nodeName,trxid);
+            if(!checkResult){
+              throw new Error('Extract rejected');
+            }
 
             var check = await eosapi.getProposeAction(proposer,proposeName);
             if(!check.result) throw new Error(check.data);
@@ -537,8 +563,8 @@ function handler(request, response) {
             var quantity = action.quantity;
 
             if(from != se["eos-mulAccount"])  throw new Error('transcation rejected');
-            // var checkResult = await checkDATXWithdraw(trxid,to,quantity.replace('EOS','DEOS'));
-            // if(!checkResult)  throw new Error('transcation rejected');
+            var checkResult = await checkDATXWithdraw(trxid,to,quantity.replace('EOS','DEOS'));
+            if(!checkResult)  throw new Error('transcation rejected');
 
             var result = await eosapi.confirm(proposer,proposeName,se["eos-account"],se["eos-privateKey"]);
 
@@ -677,6 +703,25 @@ async function checkRequestSIgn(nodeName,sign,data){
     }
   }
   return false;
+}
+
+async function checkExtractRight(nodeName,trxid){
+  try{
+    var records = await httpClient.requestWithOvertime(se["http-server-address"] + '/v1/chain/get_table_rows',3000,'POST',
+    '{"scope":"extract","code":"extract","table":"record","json":"true","limit":3000}');
+    records = JSON.parse(records).rows;
+    
+    records.array.forEach(record => {
+      if(record.trxid == trxid){
+        return nodeName == record.producer;
+      }
+    });
+    
+    return false;
+  }
+  catch(e){
+    return false;
+  }
 }
 
 module.exports = {

@@ -39,7 +39,7 @@ function genP2PKHAddr(publicKey, options) {
   try{
     publicKey = Buffer.from(publicKey, 'hex');
     IsTestnet = options && options.IsTestnet;
-    network = IsTestnet ? bitcoin.networtexks.testnet : bitcoin.networks.bitcoin;
+    network = IsTestnet ? bitcoin.networks.testnet : bitcoin.networks.bitcoin;
     address = bitcoin.payments.p2pkh({pubkey: publicKey, network: network}).address;
     return address;
   }catch(e){
@@ -266,5 +266,6 @@ module.exports = {
   decodeInput,
   decodeOutput,
   getTrxDetail,
-  decodeMemo
+  decodeMemo,
+  getUTXOS
 }

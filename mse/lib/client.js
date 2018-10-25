@@ -1,11 +1,3 @@
-
-var path = require('path');
-var INI = require("../lib/ini-file-loader");
-var confPath = path.resolve(__dirname, '../config/config.ini');
-var ini___ = INI.loadFileSync(confPath);
-var se = ini___.getOrCreateSection("node config");
-
-var url = require('url');
 var request = require("request");
 
 function requestWithOvertime(url, interval,method,body) {

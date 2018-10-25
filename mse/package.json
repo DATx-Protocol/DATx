@@ -2,7 +2,7 @@
   "name": "mse",
   "version": "1.0.0",
   "description": "datx across chain accessory implementation",
-  "main": "lib/index.js",
+  "bin": "bin/start.js",
   "engines": {
     "node": ">=0.12.0"
   },
@@ -36,5 +36,10 @@
     "web3": "^1.0.0-beta.36",
     "request": "^2.88.0",
     "redis": "^2.8.0"
+  },
+  "pkg": {
+    "assets": [
+      "config/*"
+    ]
   }
 }

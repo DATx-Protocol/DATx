@@ -1,5 +1,4 @@
 const Eos = require('eosjs');
-const path = require('path');
 
 const INI = require("../lib/ini-file-loader");
 const se = INI.getConfigFile();

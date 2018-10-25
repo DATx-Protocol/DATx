@@ -1,7 +1,8 @@
 
  bitcoinapi = require('../lib/bitcoinapi');
-// expect = require('chai').expect;
+ bitcoin = require('bitcoinjs-lib');
 
+// 托管账户的3组公私钥
 // describe('getKeysFromWIF',function(){
 //     keyPair1 = bitcoinapi.getKeysFromWIF('cV6dJVkPZfmmDg5XHNpExd8fgMTaoYgv7NusH26ZEFj2vcA9xvhz',{IsTestnet:1})
 //     keyPair2 = bitcoinapi.getKeysFromWIF('cQX7uYfhPJJGPdoqgHQXLC4WQWcDXGH7DgLs4m89xWykYkg1V4iA',{IsTestnet:1})
@@ -16,47 +17,75 @@
 
 // })
 
-// describe('genP2PKHAddr',function(){
-//     addr = bitcoinapi.genP2PKHAddr('03a4ac53ded034de0ce8e1a5aa8cae967a7c33f8ef807ee31d0a972fbcd912c8cb',{IsTestnet:1})
-//     expect(addr).to.equal('n4fc3bKTVrVRveBrHZf5Zv4wGGBTf5sdHg')
-//  })
 
-// describe('genMulSigAddr',function(){
-//     pubkeys = ['03a4ac53ded034de0ce8e1a5aa8cae967a7c33f8ef807ee31d0a972fbcd912c8cb',
-//                '038e6c355aa3a7b0a3338215e1fb952c1c255eab07012c800a151f8fd7bb9feac9',
-//                '02c8a936b526d91e6047569ec8fd53779a2368a150d63cea655fc9c7ba66d2199e']
-//     addr = bitcoinapi.genMulSigAddr(pubkeys,2,{IsTestnet:1})
-//     expect(addr.address).to.equal('2MsimupueVskjJMy79kKGP5uzfCWfZuK8TD')
-//     expect(addr.script).to.equal('522103a4ac53ded034de0ce8e1a5aa8cae967a7c33f8ef807ee31d0a972fbcd912c8cb21038e6c355aa3a7b0a3338215e1fb952c1c255eab07012c800a151f8fd7bb9feac92102c8a936b526d91e6047569ec8fd53779a2368a150d63cea655fc9c7ba66d2199e53ae')
-// })
+//用户账号
+//wif:cQg6EvRRka4BtLpzFuuVKUptToqiJj3SzhjDZEcak5eybApzAEFc
+//prikey:5c48e64645f87ae2f9fb0a48977345b973f333b121a0d561563938b3c8aacc51
+//pubkey:0298225bd8d722cf0af4ee6a943e566951f4fac3f578f231a5cbb8a0b93f4a0e49
+//address:myDAgFpwT3sTkppYKeS6LwKMCipM218EKE
 
 
-// describe('simulate bitcoin withdraw',function(){
-    // (async function(){
-    //     script = '522103a4ac53ded034de0ce8e1a5aa8cae967a7c33f8ef807ee31d0a972fbcd912c8cb21038e6c355aa3a7b0a3338215e1fb952c1c255eab07012c800a151f8fd7bb9feac92102c8a936b526d91e6047569ec8fd53779a2368a150d63cea655fc9c7ba66d2199e53ae'
-    //     //buildTrx
-    //     trx = await bitcoinapi.buildTrx('2MsimupueVskjJMy79kKGP5uzfCWfZuK8TD','n4fc3bKTVrVRveBrHZf5Zv4wGGBTf5sdHg',2e3,1e3,{IsTestnet:1})
+//托管账户地址
+//address:2MsimupueVskjJMy79kKGP5uzfCWfZuK8TD
+//script:522103a4ac53ded034de0ce8e1a5aa8cae967a7c33f8ef807ee31d0a972fbcd912c8cb21038e6c355aa3a7b0a3338215e1fb952c1c255eab07012c800a151f8fd7bb9feac92102c8a936b526d91e6047569ec8fd53779a2368a150d63cea655fc9c7ba66d2199e53ae
 
-    //     //sign locally
-    //     trx = await bitcoinapi.signTrx(trx,'cV6dJVkPZfmmDg5XHNpExd8fgMTaoYgv7NusH26ZEFj2vcA9xvhz',script,{IsTestnet:1})
-    
-    //     //sign remotly
-    //     trxSerialize = trx.toHex()
-    //     trx = bitcoinapi.getTrxFromHex(trxSerialize)
-    //     trx = await bitcoinapi.signTrx(trx,'cQX7uYfhPJJGPdoqgHQXLC4WQWcDXGH7DgLs4m89xWykYkg1V4iA',script,{IsTestnet:1})
-    //     trxSerialize = trx.toHex()
 
-    //     //broadcast trx
-    //     trx = bitcoinapi.getTrxFromHex(trxSerialize)
-    //     bitcoinapi.broadcastTrx(trx) 
-    // })()
-// })
-const bitcoin = require('bitcoinjs-lib');
-//result = bitcoin.classify.output(Buffer.from('6a0d626974636f696e6a732d6c6962','hex'));
-//console.log(result);
-//console.log(bitcoin.script.toASM(Buffer.from('6a0d626974636f696e6a732d6c6962','hex')));
-result = bitcoin.script.decompile(Buffer.from('6a0d626974636f696e6a732d6c6962','hex')).slice(1).toString('utf8');
-//console.log(result);
+//往托管账户转账
+(async function(){
+    network = bitcoin.networks.testnet;
+    to = '2MsimupueVskjJMy79kKGP5uzfCWfZuK8TD';
+    from = 'myDAgFpwT3sTkppYKeS6LwKMCipM218EKE';
+    fee = 1e3;
+    value = 100e3;
+    memo = (new Date()).toLocaleString();
 
-//result = Buffer.from('626974636f696e6a732d6c6962','hex').toString('utf8');
-console.log(result);
+    chunk = await bitcoinapi.getUTXOS(from, {IsTestnet:1});
+    utxos = JSON.parse(chunk.data).unspent_outputs;
+
+    txb = new bitcoin.TransactionBuilder(network);
+    txb.addInput(utxos[0].tx_hash_big_endian, utxos[0].tx_output_n);
+
+    txb.addOutput(to, value - fee);
+    txb.addOutput(from, utxos[0].value - value);
+
+    data = Buffer.from(memo, 'utf8');
+    embed = bitcoin.payments.embed({ data : [data],network : network });
+    txb.addOutput(embed.output, 0);
+
+    //sign
+    userwif = 'cQg6EvRRka4BtLpzFuuVKUptToqiJj3SzhjDZEcak5eybApzAEFc';
+    keyPair = bitcoin.ECPair.fromWIF(userwif, network);
+    txb.sign(0,keyPair);
+
+    result = await bitcoinapi.broadcastTrx(txb.buildIncomplete(),{IsTestnet:1});
+    console.log('trxid:' + result);
+})();
+
+
+
+
+
+
+//多重签名从托管账户提现
+// (async function(){
+//     script = '522103a4ac53ded034de0ce8e1a5aa8cae967a7c33f8ef807ee31d0a972fbcd912c8cb21038e6c355aa3a7b0a3338215e1fb952c1c255eab07012c800a151f8fd7bb9feac92102c8a936b526d91e6047569ec8fd53779a2368a150d63cea655fc9c7ba66d2199e53ae'
+//     //buildTrx
+//     trx = await bitcoinapi.buildTrx('2MsimupueVskjJMy79kKGP5uzfCWfZuK8TD','myDAgFpwT3sTkppYKeS6LwKMCipM218EKE',2e3,1e3,{IsTestnet:1})
+
+//     //sign locally
+//     trx = await bitcoinapi.signTrx(trx,'cV6dJVkPZfmmDg5XHNpExd8fgMTaoYgv7NusH26ZEFj2vcA9xvhz',script,{IsTestnet:1})
+
+//     //sign remotly
+//     trxSerialize = trx.toHex()
+//     trx = bitcoinapi.getTrxFromHex(trxSerialize)
+//     trx = await bitcoinapi.signTrx(trx,'cQX7uYfhPJJGPdoqgHQXLC4WQWcDXGH7DgLs4m89xWykYkg1V4iA',script,{IsTestnet:1})
+//     trxSerialize = trx.toHex()
+
+//     //broadcast trx
+//     trx = bitcoinapi.getTrxFromHex(trxSerialize)
+//     bitcoinapi.broadcastTrx(trx) 
+// })()
+
+
+
+
