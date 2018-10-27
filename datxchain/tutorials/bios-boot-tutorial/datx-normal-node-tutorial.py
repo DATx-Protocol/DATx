@@ -15,7 +15,7 @@ logFile = None
 
 unlockTimeout = 999999999
 
-
+http_server=""
 
 
 
@@ -67,21 +67,23 @@ def startWallet():
     #run('rm -rf ~/datxos-wallet' )
     #run('mkdir -p ~/datxos-wallet')
 
-    
-    if os.path.exists('/root/datxos-wallet'):
-        if os.path.exists('/root/datxos-wallet/my_wallet.wallet'):
-            run('rm  /root/datxos-wallet/my_wallet.wallet' )
+    home_dir=os.environ['HOME']
+    if os.path.exists(home_dir+'/datxos-wallet'):
+        if os.path.exists(home_dir+'/datxos-wallet/my_wallet.wallet'):
+            run('rm  ~/datxos-wallet/my_wallet.wallet' )
             
-        if os.path.exists('/root/datxos-wallet/my_wallet_password.txt'):    
-            run('rm  /root/datxos-wallet/my_wallet_password.txt' )
+        if os.path.exists(home_dir+'/datxos-wallet/my_wallet_password.txt'):    
+            run('rm  ~/datxos-wallet/my_wallet_password.txt' )
     else:
          
-        run('mkdir -p /root/datxos-wallet')
+        run('mkdir -p ~/datxos-wallet')
 
 
-    print(args.kdatxd + ' --unlock-timeout %d --http-server-address http://%s:8888 ' % (unlockTimeout, args.http_server))
-    background(args.kdatxd + ' --unlock-timeout %d --http-server-address http://%s:8888 --wallet-dir ~/datxos-wallet/' %( unlockTimeout, args.http_server))
     
+    #background(args.kdatxd + ' --unlock-timeout %d --http-server-address http://%s:8888 --wallet-dir ~/datxos-wallet/' %( unlockTimeout, http_server))
+    #background(args.kdatxd + ' --unlock-timeout %d --wallet-dir ~/datxos-wallet/' %( unlockTimeout, http_server))
+
+
     sleep(3)
     run(args.cldatx + 'wallet create -n my_wallet --file ~/datxos-wallet/my_wallet_password.txt' )
 
@@ -89,18 +91,16 @@ def startWallet():
 def importKeys():
     run(args.cldatx + 'wallet import -n my_wallet --private-key ' + accounts['pvt'])
 
-#cldatx --wallet-url  http://127.0.0.1:8899
+
 
 def startNode(nodeIndex, account):
     dir = args.nodes_dir  + account['name'] + '/'
     run('rm -rf ' + dir)
     run('mkdir -p ' + dir)
     ##################################    other p2p-peer-address     ###############################################
-
-    otherOpts = '    --p2p-peer-address 172.31.3.5:' + str(9002)
-    otherOpts = otherOpts + '    --p2p-peer-address 172.31.3.39:' + str(9002)
-    otherOpts = otherOpts + '    --p2p-peer-address 172.31.3.30:' + str(9002)
-    otherOpts = otherOpts + '    --p2p-peer-address 172.31.3.42:' + str(9002)
+    otherOpts=''
+    otherOpts = '    --p2p-peer-address 172.31.3.5:' + str(9876)
+    #otherOpts = otherOpts + '    --p2p-peer-address 172.31.3.39:' + str(9002)
 
     ##################################    other p2p-peer-address     ###############################################
 
@@ -118,11 +118,17 @@ def startNode(nodeIndex, account):
         '    --data-dir ' + os.path.abspath(dir) +
         '    --chain-state-db-size-mb 1024'+
         '    --verbose-http-errors'+
+        '    --sync-fetch-span 100'+
+        '    --max-transaction-time 1000'+
         ###########################   http-server-address  bnet-endpoint  p2p-listen-endpoint    #########################################
 
-        '    --http-server-address %s:' %(args.http_server) + str(8888) +
-        '    --bnet-endpoint %s:'%(args.http_server) + str(9001) +
-        '    --p2p-listen-endpoint %s:'%(args.http_server) + str(9002) +
+        #'    --http-server-address %s:' %(http_server) + str(8888) +
+        #'    --bnet-endpoint %s:'%(http_server) + str(9001) +
+        #'    --p2p-listen-endpoint %s:'%(http_server) + str(9002) +
+
+        # '    --http-server-address '  +
+        # '    --bnet-endpoint ' +
+        # '    --p2p-listen-endpoint ' +
 
         ##########################    http-server-address  bnet-endpoint  p2p-listen-endpoint    #########################################
         '    --filter-on \"*\"'+
@@ -140,9 +146,9 @@ def startNode(nodeIndex, account):
         otherOpts)
     with open(dir + 'stderr', mode='w') as f:
         f.write(cmd + '\n\n')
+    #background(cmd + '    2>>' + dir + 'stderr')
     background(cmd + '    2>>' + dir + 'stderr')
-
-
+    
 def listProducers():
     run(args.cldatx + 'system listproducers')
 
@@ -157,7 +163,7 @@ def stepStartProducer():
     startNode(0, {'name': accounts["name"], 'pvt': accounts['pvt'], 'pub': accounts['pub']})
     sleep(1.5)
 def stepLog():
-    run('tail -n 60 ' + args.nodes_dir  + accounts['name'] + '/'+ 'stderr')
+    run('tail -n 20 ' + args.nodes_dir  + accounts['name'] + '/'+ 'stderr')
 
 
 parser = argparse.ArgumentParser()
@@ -173,9 +179,9 @@ commands = [
 
 parser.add_argument('--public-key', metavar='', help="datxOS Public Key", default='DATX8Znrtgwt8TfpmbVpTKvA2oB8Nqey625CLN8bCN3TEbgx86Dsvr', dest="public_key")
 parser.add_argument('--private-Key', metavar='', help="datxOS Private Key", default='5K463ynhZoCDDa4RDcr63cUwWLTnKqmdcoTKTHBjqoKfv4u5V7p', dest="private_key")
-parser.add_argument('--cldatx', metavar='', help="Cldatx command", default='../../build/programs/cldatx/cldatx --wallet-url http://127.0.0.1:8899 ')
-parser.add_argument('--noddatx', metavar='', help="Path to noddatx binary", default='../../build/programs/noddatx/noddatx')
-parser.add_argument('--kdatxd', metavar='', help="Path to kdatxd binary", default='../../build/programs/kdatxd/kdatxd')
+parser.add_argument('--cldatx', metavar='', help="Cldatx command", default='cldatx  ')
+parser.add_argument('--noddatx', metavar='', help="Path to noddatx binary", default='noddatx')
+parser.add_argument('--kdatxd', metavar='', help="Path to kdatxd binary", default='kdatxd')
 parser.add_argument('--contracts-dir', metavar='', help="Path to contracts directory", default='../../build/contracts/')
 parser.add_argument('--user-limit', metavar='', help="Max number of users. (0 = no limit)", type=int, default=3)
 parser.add_argument('--producer-limit', metavar='', help="Maximum number of producers. (0 = no limit)", type=int, default=3)
@@ -187,7 +193,7 @@ parser.add_argument('--log-path', metavar='', help="Path to log file", default='
 parser.add_argument('--symbol', metavar='', help="The datxos.system symbol", default='SYS')
 parser.add_argument('--producer-sync-delay', metavar='', help="Time (s) to sleep to allow producers to sync", type=int, default=100)
 parser.add_argument('-a', '--all', action='store_true', help="Do everything marked with (*)")
-parser.add_argument('--http-server',default='127.0.0.1', metavar='', help='HTTP address for cldatx')
+#parser.add_argument('--http-server',default='127.0.0.1', metavar='', help='HTTP address for cldatx')
 parser.add_argument('--http-port',type=int,default=8888, metavar='', help='HTTP port for cldatx')
 #parser.add_argument('--producer-name',default='producer111a', metavar='', help='default producer name.')
 
@@ -204,7 +210,7 @@ for (flag, command, function, inAll, help) in commands:
 
 args = parser.parse_args()
 
-args.cldatx += '--url http://%s:%d ' %(args.http_server, args.http_port)
+#args.cldatx += '--url http://%s:%d ' %(args.http_server, args.http_port)
 
 logFile = open(args.log_path, 'a')
 

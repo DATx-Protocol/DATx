@@ -13,7 +13,7 @@ args = None
 logFile = None
 
 unlockTimeout = 999999999
-wait_other_node_time=10
+wait_vote_time=10
 push_action_times=20
 
 systemAccounts = [
@@ -81,9 +81,6 @@ def startWallet():
 
     run('rm -rf ~/datxos-wallet' )
     run('mkdir -p ~/datxos-wallet')
-    #background(args.kdatxd + ' --unlock-timeout %d --http-server-address http://%s:8888 --wallet-dir ~/datxos-wallet/' % (unlockTimeout,args.http_server))
-    #background(args.kdatxd + ' --unlock-timeout %d  --wallet-dir ~/datxos-wallet/' % (unlockTimeout))
-
     sleep(3)
     run(args.cldatx + 'wallet create --file ~/datxos-wallet/password.txt' ) 
 
@@ -127,23 +124,10 @@ def startNode(nodeIndex, account):
         '    --contracts-console'
         '    --genesis-json ' + os.path.abspath(args.genesis) +
         '    --blocks-dir ' + os.path.abspath(dir) + '/blocks'+
-        #'    --config-dir ' + os.path.abspath(dir) +
         '    --data-dir ' + os.path.abspath(dir) +
         '    --chain-state-db-size-mb 1024'+
         '    --verbose-http-errors'+
-        ###########################   http-server-address  bnet-endpoint  p2p-listen-endpoint    #########################################
-
-        #'    --http-server-address %s:' %(args.http_server) + str(8888) +
-        #'    --bnet-endpoint %s:' %(args.http_server)+ str(9001) +
-        #'    --p2p-listen-endpoint %s:'%(args.http_server) + str(9002) +
-
-        # '    --http-server-address '  +
-        # '    --bnet-endpoint '  +
-        # '    --p2p-listen-endpoint ' +
-
-
-        ##########################    http-server-address  bnet-endpoint  p2p-listen-endpoint    #########################################
-
+        '    --max-transaction-time 1000'
         '    --max-clients ' + str(maxClients) +
         '    --p2p-max-nodes-per-host ' + str(maxClients) +
         '    --enable-stale-production '
@@ -159,36 +143,34 @@ def startNode(nodeIndex, account):
         otherOpts)
     with open(dir + 'stderr', mode='w') as f:
         f.write(cmd + '\n\n')
-    #background(cmd + '    2>>' + dir + 'stderr')
     background(cmd + '    2>>' + dir + 'stderr')
 
 def createStakedAccounts(b, e):
+    
+    print(">>>>>>>>>>>>>       wait other nodes ,about %d secs."%(args.wait_time))
+    print(">>>>>>>>>>>>>       please add other nodes into the net.")
+    sleep(args.wait_time)
     #(b,e) =(0,len(accounts))=(0,7),(0~3)users,(4~6)producers
     for i in range(b, e):
         a = accounts[i]
 
-        stakeNet = 3000000000000  #3,0000,0000 
-        stakeCpu = 3000000000000  #3,0000,0000 
-        stakeRam = 2000000000000  
-        small_stake=5000000
+        stakeNet = 500000000  #500DATX
+        stakeCpu = 500000000  #500DATX
+        stakeRam = 500000000  #500DATX
+        small_stake=5000000 #500DATX
+
         retry(args.cldatx + 'system newaccount --transfer datxos %s %s --stake-net "%s" --stake-cpu "%s" --buy-ram "%s"   ' % 
             (a['name'], a['pub'], intToCurrency(stakeNet), intToCurrency(stakeCpu), intToCurrency(stakeRam)))
-        retry(args.cldatx + 'transfer datxos %s "%s" test' % (a['name'],intToCurrency(2000000000000)))
         sleep(1)
-
-    #retry(args.cldatx + 'system newaccount --transfer datxos %s %s --stake-net "%s" --stake-cpu "%s" --buy-ram "%s"   ' % 
-    #        ("testa", "DATX6cNcTC6WTFkKV4C8DoxcTXdDTDKvj3vgZEVDGVFckK1eTNJQtf", intToCurrency(small_stake), intToCurrency(small_stake), intToCurrency(small_stake)))
     
-    retry(args.cldatx + 'transfer datxos dotc "%s" test' % (intToCurrency(6000000000000)))
-      
-    
-    run(args.cldatx+ 'push action datxos.dtoke transfer \'{"from":"datxos.dbtc","to":"alice","quantity":"300.0000 DBTC","memo":"test"}\' -p datxos.dbtc')
-    run(args.cldatx+ 'push action datxos.dtoke transfer \'{"from":"datxos.dbtc","to":"bob","quantity":"300.0000 DBTC","memo":"test"}\' -p datxos.dbtc')
-    run(args.cldatx+ 'push action datxos.dtoke transfer \'{"from":"datxos.dbtc","to":"charlie","quantity":"300.0000 DBTC","memo":"test"}\' -p datxos.dbtc')
-    
-    for i in range(push_action_times):
-        run(args.cldatx+ 'push action datxos.dtoke transfer \'{"from":"alice","to":"datxos.dbtc","quantity":"6.0000 DBTC","memo":"test%d"}\'  -p alice' %(i) )   
-
+    for i in range(args.user_limit):
+        a = accounts[i]
+        retry(args.cldatx + 'push action datxos.token transfer \'["datxos",%s,"%s","vote"]\' -p datxos'% (a['name'],intToCurrency(7000000000000)))
+        sleep(2)
+        retry(args.cldatx + 'system delegatebw datxos %s "%s" "%s" --transfer'%(a['name'],intToCurrency(3000000000000),intToCurrency(3000000000000)))
+        
+        sleep(1)
+        #retry(args.cldatx + 'transfer datxos %s "%s" test' % (a['name'],intToCurrency(2000000000000)))
 #创建系统账户
 def createSystemAccounts():
 
@@ -198,65 +180,22 @@ def createSystemAccounts():
 def intToCurrency(i):
     return '%d.%04d %s' % (i // 10000, i % 10000, args.symbol)
 
-def listProducers():
-    run(args.cldatx + 'system listproducers')
 
 def regProducers(b, e):
     for i in range(b, e):
         a = accounts[i]
         retry(args.cldatx + 'system regproducer ' + a['name'] + ' ' + a['pub'] + ' https://' + a['name'] + '.com' + '/' + a['pub'])  
     
-    # print(">>>>>>>>>>>>>       wait other nodes ,about %d secs."%(wait_other_node_time))
-    # print(">>>>>>>>>>>>>       please add other nodes into the net.")
-    # sleep(wait_other_node_time)
 
 def vote(b, e):
+    
+
+
     for i in range(b, e):
         voter = accounts[i]['name']
         prods = random.sample(range(firstProducer, firstProducer + numProducers), args.num_producers_vote)
         prods = ' '.join(map(lambda x: accounts[x]['name'], prods))
         retry(args.cldatx + 'system voteproducer prods ' + voter + ' ' + prods)
-
-def updateAuth(account, permission, parent, controller):
-    run(args.cldatx + 'push action datxos updateauth' + jsonArg({
-        'account': account,
-        'permission': permission,
-        'parent': parent,
-        'auth': {
-            'threshold': 1, 'keys': [], 'waits': [],
-            'accounts': [{
-                'weight': 1,
-                'permission': {'actor': controller, 'permission': 'active'}
-            }]
-        }
-    }) + '-p ' + account + '@' + permission)
-
-def resign(account, controller):
-    updateAuth(account, 'owner', '', controller)
-    updateAuth(account, 'active', 'owner', controller)
-    sleep(1)
-    run(args.cldatx + 'get account ' + account)
-
-
-def setproducer(b,e):
-    list_account=[]
-    for i in range(b, e):
-        a = accounts[i]
-        list_account.append(a)
-        #retry(args.cldatx + 'system regproducer ' + a['name'] + ' ' + a['pub'] + ' https://' + a['name'] + '.com' + '/' + a['pub'])  
-    retry(args.cldatx + 'push action datxos setprods' + jsonArg({
-            "schedule":[
-                {
-                "producer_name":list_account[0]['name'],
-                "block_signing_key": list_account[0]['pub']
-            },{
-                "producer_name":list_account[1]['name'],
-                "block_signing_key": list_account[1]['pub']
-            },{
-                "producer_name":list_account[2]['name'],
-                "block_signing_key": list_account[2]['pub']
-            }]
-            }) + '-p datxos@active')
 
 
 def stepKillAll():
@@ -273,18 +212,15 @@ def stepInstallSystemContracts():
     run(args.cldatx + 'set contract datxos.msig ' + args.contracts_dir + 'DatxMsig/')
     run(args.cldatx + 'set contract datxos.charg ' + args.contracts_dir +'DatxRecharge/')
 
-    #run(args.cldatx + 'set contract datxos.dtoke ' + args.contracts_dir + 'DatxToken/')
-    #run(args.cldatx + 'set contract datxos.deth ' + args.contracts_dir + 'DatxToken/')
-    #run(args.cldatx + 'set contract datxos.deos ' + args.contracts_dir + 'DatxToken/')
-
     run(args.cldatx + 'set contract datxos.dtoke ' + args.contracts_dir + 'DatxDToken/')
+
     run(args.cldatx + 'set contract datxos.extra ' + args.contracts_dir + 'DatxExtract/')
 
     run(args.cldatx + 'set account permission datxos.dtoke active \'{"threshold": 1,"keys": [{"key": "DATX8Znrtgwt8TfpmbVpTKvA2oB8Nqey625CLN8bCN3TEbgx86Dsvr","weight": 1}],"accounts": [{"permission":{"actor":"datxos.charg","permission":"datxos.code"},"weight":1}]}\' owner -p datxos.dtoke')
     
     run(args.cldatx + 'set account permission datxos.dtoke active \'{"threshold": 1,"keys": [{"key": "DATX8Znrtgwt8TfpmbVpTKvA2oB8Nqey625CLN8bCN3TEbgx86Dsvr","weight": 1}],"accounts": [{"permission":{"actor":"datxos.extra","permission":"datxos.code"},"weight":1}]}\' owner -p datxos.dtoke')
-    
-   
+
+
 
 def stepCreateTokens():
     #datx
@@ -292,9 +228,6 @@ def stepCreateTokens():
     #totalAllocation = allocateFunds(0, len(accounts))   
     totalAllocation=76000000000000
     run(args.cldatx + 'push action datxos.token issue \'["datxos", "%s", "memo"]\' -p datxos' % intToCurrency(totalAllocation))
-
-   
-
 
     #btc
     run(args.cldatx + 'push action datxos.dtoke create \'["datxos.dbtc", "21000000.0000 DBTC",0,0,0]\' -p datxos.dtoke' )
@@ -328,15 +261,6 @@ def stepRegProducers():
     regProducers(firstProducer, firstProducer + numProducers)
     sleep(1)
 
-
-    #listProducers()
-
-def stepSetProducers():
-    print(">>>>>>>>>>>>>       wait other nodes ,about %d secs."%(wait_other_node_time))
-    print(">>>>>>>>>>>>>       please add other nodes into the net.")
-    sleep(wait_other_node_time)
-    setproducer(firstProducer, firstProducer + numProducers)
-
 def stepVote():
     vote(0, 0 + args.num_voters)
     sleep(1)
@@ -357,7 +281,7 @@ commands = [
     ('S', 'sys-contract',   stepSetSystemContract,      True,    "Set system contract"),
     ('T', 'stake',          stepCreateStakedAccounts,   True,    "Create staked accounts"),
     ('p', 'reg-prod',       stepRegProducers,           True,    "Register producers"),
-    #('v', 'vote',           stepVote,                   True,    "Vote for producers"),
+    ('v', 'vote',           stepVote,                   True,    "Vote for producers"),
     #('e', 'set-prod',       stepSetProducers,           True,    "set producers"),
     ('l', 'log',            stepLog,                    True,    "Show tail of node's log"),
 ]
@@ -369,6 +293,8 @@ parser.add_argument('--noddatx', metavar='', help="Path to noddatx binary", defa
 parser.add_argument('--kdatxd', metavar='', help="Path to kdatxd binary", default='kdatxd')
 parser.add_argument('--contracts-dir', metavar='', help="Path to contracts directory", default='../../build/contracts/')
 parser.add_argument('--user-limit', metavar='', help="Max number of users. (0 = no limit)", type=int, default=4)
+parser.add_argument('--wait-time', metavar='', help="wait other node to vote. (0 = no limit)", type=int, default=20)
+
 parser.add_argument('--producer-limit', metavar='', help="Maximum number of producers. (0 = no limit)", type=int, default=3)
 parser.add_argument('--max-user-keys', metavar='', help="Maximum user keys to import into wallet", type=int, default=10)
 parser.add_argument('--num-producers-vote', metavar='', help="Number of producers for which each user votes", type=int, default=3)
