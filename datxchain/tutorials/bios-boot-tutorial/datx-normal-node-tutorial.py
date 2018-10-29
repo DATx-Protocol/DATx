@@ -120,6 +120,7 @@ def startNode(nodeIndex, account):
         '    --verbose-http-errors'+
         '    --sync-fetch-span 100'+
         '    --max-transaction-time 1000'+
+        '    --contracts-console'+
         ###########################   http-server-address  bnet-endpoint  p2p-listen-endpoint    #########################################
 
         #'    --http-server-address %s:' %(http_server) + str(8888) +

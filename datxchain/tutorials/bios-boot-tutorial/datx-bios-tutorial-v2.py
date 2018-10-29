@@ -189,8 +189,6 @@ def regProducers(b, e):
 
 def vote(b, e):
     
-
-
     for i in range(b, e):
         voter = accounts[i]['name']
         prods = random.sample(range(firstProducer, firstProducer + numProducers), args.num_producers_vote)
