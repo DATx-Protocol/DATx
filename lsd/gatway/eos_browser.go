@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
+	"log"
 	"net/http"
 	"strconv"
 	"strings"
@@ -185,7 +186,7 @@ func NewEOSBrowser(account string, server *server.ChainServer) *EOSBrowser {
 func (eos *EOSBrowser) GetBlocks(blocknum int64) (*chainlib.Block, error) {
 	var allurl = eos.url + "blocks/" + string(blocknum)
 
-	// fmt.Printf("GetBlocks request url is : %s\n", allurl)
+	// log.Printf("GetBlocks request url is : %s\n", allurl)
 
 	res, err := http.Get(allurl)
 	if err != nil {
@@ -233,11 +234,11 @@ func (eos *EOSBrowser) Irreversible(blocknum int64) (bool, error) {
 func (eos *EOSBrowser) GetTransaction(trxid string) (*EOSTransactions, error) {
 	var allurl = eos.url + "transactions/" + trxid
 
-	fmt.Printf("GetTransaction request url is : %s\n", allurl)
+	log.Printf("GetTransaction request url is : %s\n", allurl)
 
 	res, err := http.Get(allurl)
 	if err != nil {
-		fmt.Printf("geturl:%v\n", err)
+		log.Printf("geturl:%v\n", err)
 		return nil, err
 	}
 
@@ -268,7 +269,7 @@ func (eos *EOSBrowser) GetTransaction(trxid string) (*EOSTransactions, error) {
 func (eos *EOSBrowser) GetAccountActions(accountAddr string) ([]chainlib.Transaction, error) {
 	var allurl = eos.url + "actions?account=" + accountAddr + "&name=transfer&page=" + fmt.Sprintf("%d", eos.currentPage) + "&per_page=10"
 
-	fmt.Printf("EOS GetAccountActions request url is : %s\n", allurl)
+	// log.Printf("EOS GetAccountActions request url is : %s\n", allurl)
 
 	res, err := http.Get(allurl)
 	if err != nil {
@@ -306,7 +307,7 @@ func (eos *EOSBrowser) GetAccountActions(accountAddr string) ([]chainlib.Transac
 
 		eostrx, err := eos.GetTransaction(v.TrxID)
 		if err != nil {
-			fmt.Printf("GetAccountActions :%v %v", accountAddr, err)
+			log.Printf("GetAccountActions :%v %v", accountAddr, err)
 			continue
 		}
 
@@ -333,7 +334,7 @@ func (eos *EOSBrowser) GetAccountActions(accountAddr string) ([]chainlib.Transac
 func (eos *EOSBrowser) GetAccounts(args string) (*EOSResponseAccounts, error) {
 	var allurl = eos.url + "accounts/" + args
 
-	fmt.Printf("GetAccounts request url is : %s\n", allurl)
+	log.Printf("GetAccounts request url is : %s\n", allurl)
 
 	res, err := http.Get(allurl)
 	if err != nil {
@@ -360,7 +361,7 @@ func (eos *EOSBrowser) GetAccounts(args string) (*EOSResponseAccounts, error) {
 }
 
 func (eos *EOSBrowser) IsIrreversible(trxid string) (bool, error) {
-	fmt.Printf("trsid len:%d\n", len(trxid))
+	log.Printf("trsid len:%d\n", len(trxid))
 
 	trx, err := eos.GetTransaction(trxid)
 	if err != nil {
@@ -385,13 +386,13 @@ func (eos *EOSBrowser) SetTickAccountAddr(account string) {
 func (eos *EOSBrowser) Tick() {
 	trxs, err := eos.GetAccountActions(eos.tickAccount)
 	if err != nil {
-		fmt.Printf("Get trxs err: %v\n", err)
+		log.Printf("Get trxs err: %v\n", err)
 		return
 	}
 
 	for _, trx := range trxs {
 		if trx.IsIrrevisible {
-			// fmt.Printf("eos trx is irreversible: %v\n", trx.TransactionID)
+			// log.Printf("eos trx is irreversible: %v\n", trx.TransactionID)
 
 			var result error
 			if trx.To == eos.tickAccount {
@@ -406,18 +407,18 @@ func (eos *EOSBrowser) Tick() {
 					continue
 				}
 
-				fmt.Printf("BTC push action faile and retry on Tick(): %v  %v\n", trx.TransactionID, time.Now().Unix())
+				log.Printf("BTC push action faile and retry on Tick(): %v  %v\n", trx.TransactionID, time.Now().Unix())
 				eos.tick.AddTask(trx, EOSDelaySeconds)
 			}
 
 		} else {
 			jobid := trx.Category + "_" + trx.TransactionID
 			if job, _ := delayqueue.Get(jobid); job != nil {
-				fmt.Printf("eos trx is existed: %v\n", trx.TransactionID)
+				log.Printf("eos trx is existed: %v\n", trx.TransactionID)
 				continue
 			}
 
-			fmt.Printf("add eos task: %v  %v\n", trx.TransactionID, time.Now().Unix())
+			log.Printf("add eos task: %v  %v\n", trx.TransactionID, time.Now().Unix())
 			eos.tick.AddTask(trx, EOSDelaySeconds)
 		}
 	}
