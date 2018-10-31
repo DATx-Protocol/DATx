@@ -39,6 +39,11 @@ func QuantityToAmount(quantity string) float64 {
 	return amount
 }
 
+// QuantityToToken ... 不做错误处理
+func QuantityToToken(quantity string) string {
+	return quantity[strings.Index(quantity, " ")+1:]
+}
+
 // GetWalletValue ... DATX，BTC，ETH
 func GetWalletValue(category string, account string) ([]*TokenValue, error) {
 	tokens := make([]*TokenValue, 0)
@@ -50,16 +55,25 @@ func GetWalletValue(category string, account string) ([]*TokenValue, error) {
 		tokens = append(tokens, tokenValue)
 	}
 	if category == "DATX" {
-		if tokenValue, err := GetTokenValue("DATX", account); err == nil {
-			tokens = append(tokens, tokenValue)
-		} else if tokenValue, err := GetTokenValue("DBTC", account); err == nil {
-			tokens = append(tokens, tokenValue)
-		} else if tokenValue, err := GetTokenValue("DETH", account); err == nil {
-			tokens = append(tokens, tokenValue)
-		} else if tokenValue, err := GetTokenValue("DEOS", account); err == nil {
-			tokens = append(tokens, tokenValue)
+		if datxValue, err := GetTokenValue("DATX", account); err == nil {
+			tokens = append(tokens, datxValue)
 		} else {
-			return nil, fmt.Errorf("wallet not found")
+			tokens = append(tokens, &TokenValue{Token: "DATX", Balance: "0.0000 DATX", Value: "$ 0.00"})
+		}
+		if dbtcValue, err := GetTokenValue("DBTC", account); err == nil {
+			tokens = append(tokens, dbtcValue)
+		} else {
+			tokens = append(tokens, &TokenValue{Token: "DBTC", Balance: "0.0000 DBTC", Value: "$ 0.00"})
+		}
+		if dethValue, err := GetTokenValue("DETH", account); err == nil {
+			tokens = append(tokens, dethValue)
+		} else {
+			tokens = append(tokens, &TokenValue{Token: "DETH", Balance: "0.0000 DETH", Value: "$ 0.00"})
+		}
+		if deosValue, err := GetTokenValue("DEOS", account); err == nil {
+			tokens = append(tokens, deosValue)
+		} else {
+			tokens = append(tokens, &TokenValue{Token: "DEOS", Balance: "0.0000 DEOS", Value: "$ 0.00"})
 		}
 	}
 	return tokens, nil

@@ -129,13 +129,13 @@ func (ext *Extract) pushTrxToQueue(trx chainlib.Transaction) {
 
 	bytes, err := json.Marshal(trx)
 	if err != nil {
-		fmt.Printf("trx marshal failed:%v %v\n", trx, err)
+		log.Printf("trx marshal failed:%v %v\n", trx, err)
 		return
 	}
 	job.Body = string(bytes)
 
 	if err = delayqueue.Push(job); err != nil {
-		fmt.Printf("PushTrxToQueue Push queue failed:%v   %v\n", trx, err)
+		log.Printf("PushTrxToQueue Push queue failed:%v   %v\n", trx, err)
 		return
 	}
 }
@@ -149,12 +149,17 @@ func (ext *Extract) pushExtractAction(trx chainlib.Transaction) error {
 		Category: trx.Category,
 	}
 
+	//remove
+	jobid := trx.Category + "_" + trx.TransactionID
+	delayqueue.Remove(jobid)
+
+	//push action
 	bytes, err := json.Marshal(args)
 	if err != nil {
 		log.Printf("PushExtractAction marshal failed:%v %v\n", trx, err)
 		return err
 	}
-	_, err = chainlib.ClPushAction("datxos.extra", "recordtrx", string(bytes), "datxos")
+	_, err = chainlib.ClPushAction("datxos.extra", "recordtrx", string(bytes), ext.producerName)
 	if err != nil {
 		log.Printf("Extract push recordtrx failed:%v %v\n", trx, err)
 		return err
@@ -163,11 +168,11 @@ func (ext *Extract) pushExtractAction(trx chainlib.Transaction) error {
 	var trxID string
 	trxID, err = func(t chainlib.Transaction) (string, error) {
 		switch t.Category {
-		case "BTC":
+		case "DBTC":
 			return BTCMultiSig(trx)
-		case "ETH":
+		case "DETH":
 			return ETHMultiSig(trx)
-		case "EOS":
+		case "DEOS":
 			return EOSMultiSig(trx)
 		default:
 			return "", fmt.Errorf("PushExtractAction category %v not defined", trx.Category)
@@ -180,11 +185,7 @@ func (ext *Extract) pushExtractAction(trx chainlib.Transaction) error {
 		// return err
 	}
 
-	//extract success
-	jobid := trx.Category + "_" + trx.TransactionID
-
-	log.Printf("PushExtractAction success and delete job id=%v %v\n", jobid, time.Now().Unix())
-	delayqueue.Remove(jobid)
+	log.Printf("Extract finished: %v\n", trx)
 
 	return nil
 }
@@ -212,10 +213,7 @@ func (ext *Extract) taskLoop() {
 				irreversible := CheckIrreversible(trx)
 				if irreversible {
 					go ext.pushExtractAction(trx)
-				} else {
-					ext.pushTrxToQueue(trx)
 				}
-				fmt.Printf("Extract finished: %v\n", trx)
 			}
 		}
 	}

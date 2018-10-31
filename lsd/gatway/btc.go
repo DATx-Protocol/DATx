@@ -1,6 +1,7 @@
 package gatway
 
 import (
+	"crypto/tls"
 	"datx/lsd/chainlib"
 	"datx/lsd/delayqueue"
 	"datx/lsd/server"
@@ -96,7 +97,7 @@ type BTCBrowser struct {
 
 func NewBTCBrowser(accountAddr string, server *server.ChainServer) *BTCBrowser {
 	return &BTCBrowser{
-		url:          "https://blockchain.info",
+		url:          "https://testnet.blockchain.info",
 		apikey:       "",
 		tickAccount:  accountAddr,
 		handleHeight: 0,
@@ -110,7 +111,7 @@ func (btc *BTCBrowser) GetTrxs(addr string) ([]chainlib.Transaction, error) {
 	requrl := btc.url + "/rawaddr/" + addr
 	// requrl := "https://testnet.blockchain.info/rawtx/6c711db1296824782a1206bdc27034c23710a1b4fc3c504b88f0e49583ae29cb"
 
-	// fmt.Printf("BTC GetTrxs request url is : %s\n", requrl)
+	// log.Printf("BTC GetTrxs request url is : %s\n", requrl)
 
 	res, err := http.Get(requrl)
 	if err != nil {
@@ -181,7 +182,7 @@ func (btc *BTCBrowser) GetTrxs(addr string) ([]chainlib.Transaction, error) {
 func (btc *BTCBrowser) GetLatestBlockNum() (int64, error) {
 	requrl := btc.url + "/latestblock"
 
-	// fmt.Printf("BTC GetLatestBlockNum request url is : %s\n", requrl)
+	// log.Printf("BTC GetLatestBlockNum request url is : %s\n", requrl)
 
 	res, err := http.Get(requrl)
 	if err != nil {
@@ -229,18 +230,17 @@ func (btc *BTCBrowser) SetTickAccountAddr(account string) {
 func (btc *BTCBrowser) Tick() {
 	trxs, err := btc.GetTrxs(btc.tickAccount)
 	if err != nil {
-		fmt.Printf("Get trxs err: %v\n", err)
+		log.Printf("Get trxs err: %v\n", err)
 		return
 	}
 
 	for _, trx := range trxs {
 		if trx.IsIrrevisible {
-			// fmt.Printf("BTC trx is irreversible on Tick(): %v\n", trx.TransactionID)
+			// log.Printf("BTC trx is irreversible on Tick(): %v\n", trx.TransactionID)
 			//exec push action
 
 			if btc.handleHeight < trx.BlockNum {
 				btc.handleHeight = trx.BlockNum
-				fmt.Printf("trx btc from: %v  %v\n", trx.TransactionID, btc.handleHeight)
 			}
 
 			var result error
@@ -250,22 +250,14 @@ func (btc *BTCBrowser) Tick() {
 				result = btc.pushExtract(trx)
 			}
 
-			if result != nil {
-				jobid := trx.Category + "_" + trx.TransactionID
-				if job, _ := delayqueue.Get(jobid); job != nil {
-					continue
-				}
-
-				fmt.Printf("BTC push action faile and retry on Tick(): %v  %v\n", trx.TransactionID, time.Now().Unix())
-				btc.tick.AddTask(trx, BTCRetrySeconds)
-			}
+			log.Printf("[Tick] BTC push action result:%v\n", result)
 		} else {
 			jobid := trx.Category + "_" + trx.TransactionID
 			if job, _ := delayqueue.Get(jobid); job != nil {
 				continue
 			}
 
-			fmt.Printf("BTC add btc to delay task on Tick(): %v  %v\n", trx.TransactionID, time.Now().Unix())
+			log.Printf("BTC add btc to delay task on Tick(): %v  %v\n", trx.TransactionID, time.Now().Unix())
 			btc.tick.AddTask(trx, BTCDelaySeconds)
 		}
 	}
@@ -273,7 +265,7 @@ func (btc *BTCBrowser) Tick() {
 
 //ReTry ...
 func (btc *BTCBrowser) ReTry(trx chainlib.Transaction) bool {
-	fmt.Printf("BTC trx on ReTry(): %v\n", trx.TransactionID)
+	log.Printf("BTC trx on ReTry(): %v\n", trx.TransactionID)
 	blockNum := trx.BlockNum
 
 	sta, err := btc.Irreversible(blockNum)
@@ -301,8 +293,13 @@ func (btc *BTCBrowser) pushExtract(trx chainlib.Transaction) error {
 	//eg: https://127.0.0.1:8080/btc/decodeMemo?script=6a0d626974636f696e6a732d6c6962
 	url := fmt.Sprintf("https://127.0.0.1:8080/btc/decodeMemo?script=%s", trx.Memo)
 
-	resp, err := http.Get(url)
+	tr := &http.Transport{
+		TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
+	}
+	client := &http.Client{Transport: tr}
+	resp, err := client.Get(url)
 	if err != nil {
+		log.Printf("get btc url : %v\n", err)
 		return err
 	}
 	defer resp.Body.Close()

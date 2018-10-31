@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
+	"log"
 	"net/http"
 	"strconv"
 	"strings"
@@ -130,6 +131,10 @@ func MatchSignupAccount(request SignupAccountRequest, trxList []*SignupTrxInfo) 
 		if request.Memo != trx.Memo {
 			continue
 		}
+		err := WaitIrreversible(trx.Trxid)
+		if err != nil {
+			return nil, err
+		}
 		separatorPos := strings.Index(trx.Memo, " ")
 		if separatorPos <= 0 {
 			separatorPos = strings.Index(trx.Memo, "-")
@@ -157,7 +162,7 @@ func ClSystemNewaccount(sign *SignupAccountInfo) (string, error) {
 		sign.SysAccount + " " + sign.NewAccount + " " + sign.PublicKey +
 		" --stake-net '0.1 DATX' --stake-cpu '0.1 DATX' --buy-ram '" + ramAmount + " DATX'" +
 		" -j " + " -f " + " -p " + sign.SysAccount
-	fmt.Println(command)
+	log.Println(command)
 	chainlib.ClWalletUnlock(WalletConfig.PassWord)
 	return chainlib.ExecShell(command)
 }
@@ -170,7 +175,7 @@ type SignupPKRequest struct {
 // ClGetAccounts ...
 func ClGetAccounts(publicKey string) (string, error) {
 	command := "cldatx -u " + WalletConfig.DatxIP + " get accounts " + publicKey
-	fmt.Println(command)
+	log.Println(command)
 	chainlib.ClWalletUnlock(WalletConfig.PassWord)
 	return chainlib.ExecShell(command)
 }
@@ -191,11 +196,11 @@ var (
 func LoadConfig() {
 	file, err := ioutil.ReadFile("config.json")
 	if err != nil {
-		fmt.Println("load config error: ", err)
+		log.Println("load config error: ", err)
 	}
 	err = json.Unmarshal(file, &WalletConfig)
 	if err != nil {
-		fmt.Println("para config failed: ", err)
+		log.Println("para config failed: ", err)
 	}
-	fmt.Println(WalletConfig)
+	log.Println(WalletConfig)
 }

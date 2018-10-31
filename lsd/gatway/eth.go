@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
+	"log"
 	"net/http"
 	"strconv"
 	"time"
@@ -109,7 +110,7 @@ func (eth *ETHBrowser) GetTrxs(account string, startpos, endpos int64) ([]chainl
 	q.Add("apikey", eth.apikey)
 	req.URL.RawQuery = q.Encode()
 
-	//fmt.Printf("allurl: %s", req.URL.String())
+	//log.Printf("allurl: %s", req.URL.String())
 
 	var resp *http.Response
 	resp, err = http.DefaultClient.Do(req)
@@ -141,7 +142,7 @@ func (eth *ETHBrowser) GetTrxs(account string, startpos, endpos int64) ([]chainl
 		return nil, fmt.Errorf("error : trx not found")
 	}
 
-	// fmt.Printf("\n%v\n", rest.Result)
+	// log.Printf("\n%v\n", rest.Result)
 	result := make([]chainlib.Transaction, 0, len(rest.Result))
 
 	for _, v := range rest.Result {
@@ -209,7 +210,7 @@ func (eth *ETHBrowser) GetBlock(num int64) (*chainlib.Block, error) {
 	q.Add("apikey", eth.apikey)
 	req.URL.RawQuery = q.Encode()
 
-	fmt.Printf("ETH allurl: %s", req.URL.String())
+	log.Printf("ETH allurl: %s", req.URL.String())
 
 	var resp *http.Response
 	resp, err = http.DefaultClient.Do(req)
@@ -285,7 +286,7 @@ func (eth *ETHBrowser) GetLatestBlockNum() (int64, error) {
 	q.Add("apikey", eth.apikey)
 	req.URL.RawQuery = q.Encode()
 
-	// fmt.Printf("allurl: %s", req.URL.String())
+	// log.Printf("allurl: %s", req.URL.String())
 
 	var resp *http.Response
 	resp, err = http.DefaultClient.Do(req)
@@ -316,7 +317,7 @@ func (eth *ETHBrowser) GetLatestBlockNum() (int64, error) {
 		return 0, err
 	}
 
-	fmt.Printf("\nETH latest blocknum: %v\n", num)
+	log.Printf("\nETH latest blocknum: %v\n", num)
 	return num, nil
 }
 
@@ -325,21 +326,20 @@ func (eth *ETHBrowser) SetTickAccountAddr(account string) {
 }
 
 func (eth *ETHBrowser) Tick() {
-	fmt.Printf("get blocknum from ontick: %v\n", eth.handleHeight)
 	trxs, err := eth.GetTrxs(eth.tickAddress, eth.handleHeight, 99999999)
 	if err != nil {
-		fmt.Printf("ETH Get trxs on tick err: %v\n", err)
+		log.Printf("ETH Get trxs on tick %v\n", err)
 		return
 	}
 
 	for _, trx := range trxs {
 		if trx.IsIrrevisible {
-			// fmt.Printf("trx is irreversible: %v\n", trx.TransactionID)
+			// log.Printf("trx is irreversible: %v\n", trx.TransactionID)
 			//exec push action
 
 			if eth.handleHeight < trx.BlockNum {
 				eth.handleHeight = trx.BlockNum
-				fmt.Printf("ETH trx irreversible from: %v  %v\n", trx.TransactionID, eth.handleHeight)
+				log.Printf("ETH trx irreversible from: %v  %v\n", trx.TransactionID, eth.handleHeight)
 			}
 
 			var result error
@@ -349,24 +349,15 @@ func (eth *ETHBrowser) Tick() {
 				result = chainlib.PushExtract(trx)
 			}
 
-			if result != nil {
-				jobid := trx.Category + "_" + trx.TransactionID
-				if job, _ := delayqueue.Get(jobid); job != nil {
-					continue
-				}
-
-				fmt.Printf("BTC push action faile and retry on Tick(): %v  %v\n", trx.TransactionID, time.Now().Unix())
-				eth.tick.AddTask(trx, EOSDelaySeconds)
-			}
-
+			log.Printf("[Tick] ETH push action result:%v\n", result)
 		} else {
 			jobid := trx.Category + "_" + trx.TransactionID
 			if job, _ := delayqueue.Get(jobid); job != nil {
-				fmt.Printf("ETH tick trx is existed: %v %v\n", trx.TransactionID, time.Now().Unix())
+				log.Printf("ETH tick trx is existed: %v %v\n", trx.TransactionID, time.Now().Unix())
 				continue
 			}
 
-			fmt.Printf("ETH Add eth task on tick: %v  %v\n", trx.TransactionID, time.Now().Unix())
+			log.Printf("ETH Add eth task on tick: %v  %v\n", trx.TransactionID, time.Now().Unix())
 			eth.tick.AddTask(trx, ETHDelaySeconds)
 		}
 	}
@@ -375,7 +366,7 @@ func (eth *ETHBrowser) Tick() {
 func (eth *ETHBrowser) ReTry(trx chainlib.Transaction) bool {
 	blockNum := trx.BlockNum
 
-	fmt.Printf("ETH ReTry eth on tick: %v  %v\n", trx.TransactionID, time.Now().Unix())
+	log.Printf("ETH ReTry eth on tick: %v  %v\n", trx.TransactionID, time.Now().Unix())
 
 	sta, err := eth.Irreversible(blockNum)
 	if err != nil || !sta {

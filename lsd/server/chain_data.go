@@ -305,11 +305,11 @@ type ChargeExpirationTable struct {
 		Trxid    string `json:"trxid"`
 		From     string `json:"from"`
 		To       string `json:"to"`
-		BlockNum int64  `json:"blocknum"`
+		Blocknum int    `json:"blocknum"`
 		Quantity string `json:"quantity"`
 		Category string `json:"category"`
 		Memo     string `json:"memo"`
-		Data     int    `json:"data"`
+		Data     string `json:"data"`
 	} `json:"rows"`
 	More bool `json:"more"`
 }

@@ -17,7 +17,7 @@ type TrxResult struct {
 }
 
 func jsonBindingError(ctx *gin.Context) {
-	ctx.JSON(400, gin.H{
+	ctx.JSON(200, gin.H{
 		"code":    400,
 		"message": "Json Binding Error",
 		"data":    nil,
@@ -32,7 +32,7 @@ func explorerError(ctx *gin.Context, err error) {
 			"data":    nil,
 		})
 	} else {
-		ctx.JSON(500, gin.H{
+		ctx.JSON(200, gin.H{
 			"code":    500,
 			"message": err.Error(),
 			"data":    nil,
@@ -144,6 +144,11 @@ func postDATXSignup(ctx *gin.Context) {
 		return
 	}
 	trxID, err := chainlib.ParseTrxID(outStr)
+	if err != nil {
+		explorerError(ctx, err)
+		return
+	}
+	err = explorer.WaitIrreversible(trxID)
 	if err != nil {
 		explorerError(ctx, err)
 		return

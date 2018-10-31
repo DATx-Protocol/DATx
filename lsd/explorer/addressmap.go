@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
+	"log"
 	"net/http"
 
 	simplejson "github.com/bitly/go-simplejson"
@@ -56,19 +57,15 @@ func GetCurrentBP() (string, error) {
 
 // ClRecordUser ...
 func ClRecordUser(datxaddress string, address string) (string, error) {
-	bpname, err := GetCurrentBP()
-	if err != nil {
-		return "", fmt.Errorf("datx get_info error %v", err)
-	}
 	var addressMap AddressMapInfo
 	addressMap.DatxAddress = datxaddress
 	addressMap.Address = address
-	addressMap.BPName = bpname
+	addressMap.BPName = WalletConfig.Name
 	js, _ := json.Marshal(addressMap)
 	addressStr := "'" + string(js) + "'"
 	command := "cldatx -u " + WalletConfig.DatxIP + " push action datxos.charg recorduser " +
 		addressStr + " -j " + " -f " + " -p " + WalletConfig.Name
-	fmt.Println(command)
+	log.Println(command)
 	chainlib.ClWalletUnlock(WalletConfig.PassWord)
 	return chainlib.ExecShell(command)
 }

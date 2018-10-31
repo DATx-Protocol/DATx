@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
+	"log"
 	"net/http"
 	"time"
 
@@ -82,6 +83,7 @@ func GetDATXLIBNum() (int64, error) {
 
 // WaitIrreversible ...
 func WaitIrreversible(trxID string) error {
+	period := 0
 	for {
 		blockNum, err := GetDATXTrxBlockNum(trxID)
 		if err != nil { // 报错退出循环
@@ -91,9 +93,15 @@ func WaitIrreversible(trxID string) error {
 		if err != nil { // 报错退出循环
 			return err
 		}
-		if libNum > blockNum { // 不可逆退出循环
+		if libNum > blockNum { // 达到不可逆
+			log.Printf("libNum : %d\tblockNum : %d\n", libNum, blockNum)
 			return nil
 		}
+		if period > 60 { // 无法达到不可逆
+			log.Printf("libNum : %d\tblockNum : %d\n", libNum, blockNum)
+			return fmt.Errorf("datx transaction %v cannot get irreversible", trxID)
+		}
 		time.Sleep(time.Duration(1) * time.Second) // 否则等待1秒
+		period++
 	}
 }

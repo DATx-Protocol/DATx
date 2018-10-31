@@ -11,7 +11,7 @@ import (
 	"math/rand"
 	"os/exec"
 	"strconv"
-	"time"
+	"strings"
 
 	simplejson "github.com/bitly/go-simplejson"
 )
@@ -85,8 +85,6 @@ func RandomSha256() string {
 }
 
 // ParseTrxID ...
-// string	返回TrxID
-// error	返回json解析错误
 func ParseTrxID(inStr string) (string, error) {
 	js, err := simplejson.NewJson([]byte(inStr))
 	if err != nil {
@@ -96,9 +94,8 @@ func ParseTrxID(inStr string) (string, error) {
 }
 
 // ExecShell ...
-// string	返回标准输出
-// error	返回标准错误
 func ExecShell(command string) (string, error) {
+	// log.Printf("\n****************************************\n%s\n****************************************\n", command)
 	cmd := exec.Command("/bin/bash", "-c", command)
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout = &stdout
@@ -120,23 +117,31 @@ func ClWalletUnlock(password string) (string, error) {
 
 // ClPushAction ...
 func ClPushAction(account, action, data, permission string) (string, error) {
-	// //Ensure that your wallet is unlocked before using it!
-	// keys := GetCfgProducerKey()
-	// if len(keys) != 2 {
-	// 	return "", fmt.Errorf("ClPushAction get producer keys error")
-	// }
-	// unlockwallet := fmt.Sprintf("cldatx wallet unlock --password %s", keys[0])
-	// _, err := ExecShell(unlockwallet)
-	// str := err.Error()
-
-	// if !strings.Contains(str, "Already unlocked") {
-	// 	fmt.Printf("unlock wallet err: %v\n", err)
-	// 	return "", err
-	// }
-
 	actionstr := fmt.Sprintf("cldatx push action %s %s '%s' -j -f -p %s", account, action, data, permission)
-	fmt.Println(actionstr)
-	return ExecShell(actionstr)
+	log.Printf("\n****************************************\n%s\n****************************************\n", actionstr)
+	result, err := ExecShell(actionstr)
+	if err != nil {
+		if strings.Contains(err.Error(), "Already unlocked") {
+			//Ensure that your wallet is unlocked before using it!
+			wname, wpassword := common.GetWalletNameAndPassword()
+			if len(wpassword) == 0 {
+				log.Print("Push Action before setup your wallet name and password in your ~/datxos-wallet/wallet_password.ini.\n")
+				return "", fmt.Errorf("~/datxos-wallet/wallet_password.ini not found")
+			}
+			unlockwallet := fmt.Sprintf("cldatx wallet unlock -n %s --password %s", wname, wpassword)
+			_, err := ExecShell(unlockwallet)
+			if err != nil {
+				log.Printf("Push Action unlock wallet: %v\n", err)
+				return "", nil
+			}
+
+			result, err = ExecShell(actionstr)
+		}
+	}
+	if err == nil {
+		log.Printf("\nPushc Action return: %s\n", result)
+	}
+	return result, err
 }
 
 // ClPushTransfer ...
@@ -157,7 +162,6 @@ func ClPushTransfer(account string, action string, trans TransferInfo) (string, 
 }
 
 // ClPushCharge ...
-// string	返回TrxID
 func ClPushCharge(account string, action string, charge ChargeInfo) (string, error) {
 	//Ensure that your wallet is unlocked before using it!
 	js, _ := json.Marshal(charge)
@@ -174,7 +178,6 @@ func ClPushCharge(account string, action string, charge ChargeInfo) (string, err
 }
 
 // ClGetTrxBlockNum ...
-// int64	返回交易的block_num
 func ClGetTrxBlockNum(trxID string) (int64, error) {
 	command := "cldatx get transaction " + trxID
 	outStr, err := ExecShell(command)
@@ -203,7 +206,6 @@ func ClGetTrxInfo(trxID string) (*TransactionInfo, error) {
 }
 
 // ClGetLIBNum ...
-// int64	返回LIBNUM
 func ClGetLIBNum() (int64, error) {
 	command := "cldatx get info"
 	outStr, err := ExecShell(command)
@@ -215,20 +217,6 @@ func ClGetLIBNum() (int64, error) {
 		return 0, fmt.Errorf("simplejson error: %v\n", outStr)
 	}
 	return js.Get("last_irreversible_block_num").MustInt64(), nil
-}
-
-// ClWaitIrreversible ...
-func ClWaitIrreversible(blockNum int64) error {
-	for {
-		libNum, err := ClGetLIBNum()
-		if err != nil { // 报错退出循环
-			return err
-		}
-		if libNum > blockNum { // 不可逆退出循环
-			return nil
-		}
-		time.Sleep(time.Duration(1) * time.Second) // 否则等待1秒
-	}
 }
 
 //PushCharge push charge action to blockchain
@@ -245,7 +233,7 @@ func PushCharge(trx Transaction) error {
 
 	_, err := ClPushCharge("datxos.charg", "charge", charge)
 	if err != nil {
-		fmt.Printf("PushCharge err: %v %v\n:", trx, err)
+		log.Printf("\nPushCharge failed: %v %v\n:", trx.TransactionID, err)
 		return err
 	}
 
@@ -265,7 +253,7 @@ func PushExtract(trx Transaction) error {
 	}
 	_, err = ClPushAction("datxos.extra", "setsuccess", string(bytes), extract.Producer)
 	if err != nil {
-		log.Printf("PushExtract push action setsuccess failed:%v %v\n", trx, err)
+		log.Printf("PushExtract failed:%v %v\n", trx.TransactionID, err)
 		return err
 	}
 

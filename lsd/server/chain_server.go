@@ -6,6 +6,7 @@ import (
 	"datx/lsd/delayqueue"
 	"encoding/json"
 	"fmt"
+	"log"
 	"strconv"
 	"time"
 )
@@ -71,12 +72,13 @@ func (tick *ChainServer) queryLoop() {
 			{
 				isCurProducer := IsCurrentProducer()
 				if !isCurProducer {
+					log.Print("\nChainServer the producer-name of config.ini is not current producer.\n\n ")
 					break
 				}
 
 				//charge
 				for _, v := range tick.browser {
-					v.Tick()
+					go v.Tick()
 				}
 
 				//get expire trx from charge expiration table
@@ -122,7 +124,7 @@ func (tick *ChainServer) taskLoop() {
 					break
 				}
 
-				// fmt.Printf("ChainServer delay finished: %v   %v\n", trx.TransactionID, time.Now().UnixNano())
+				// log.Printf("ChainServer delay finished: %v   %v\n", trx.TransactionID, time.Now().UnixNano())
 				tick.trxPool <- trx
 			}
 		}
@@ -135,7 +137,7 @@ func (tick *ChainServer) execLoop() {
 		//exec method
 		browser, ok := tick.browser[trx.Category]
 		if !ok {
-			fmt.Printf("Trx type is not support:%v\n", trx.Category)
+			log.Printf("Trx type is not support:%v\n", trx.Category)
 			continue
 		}
 
@@ -147,7 +149,7 @@ func (tick *ChainServer) execLoop() {
 		//exec success,delete it
 		jobid := trx.Category + "_" + trx.TransactionID
 
-		// fmt.Printf("ChainServer delete job id=%v %v\n", jobid, time.Now().Unix())
+		// log.Printf("ChainServer delete job id=%v %v\n", jobid, time.Now().Unix())
 		delayqueue.Remove(jobid)
 	}
 }
@@ -162,23 +164,31 @@ func (tick *ChainServer) AddTask(trx chainlib.Transaction, delay int64) {
 
 	bytes, err := json.Marshal(trx)
 	if err != nil {
-		fmt.Printf("trx marshal failed:%v %v\n", trx, err)
+		log.Printf("trx marshal failed:%v %v\n", trx, err)
 		return
 	}
 	job.Body = string(bytes)
 
 	if err = delayqueue.Push(job); err != nil {
-		fmt.Printf("Push queue failed.%v\n", err)
+		log.Printf("Push queue failed.%v\n", err)
 		return
 	}
 }
 func (tick *ChainServer) pushChargeExpiredTrxs() error {
 	//get expired trx from extract smart contract table
-	raw, err := GetOuterTrxTable("datxos.charg", "datxos.charg", "expiration")
+	log.Print("[ChainServer] Get expiration transaction and push action again.\n")
+	// raw, err := GetOuterTrxTable("datxos.charg", "datxos.charg", "expiration")
+	extraStr := fmt.Sprint("cldatx get table datxos.charg datxos.charg expiration")
+	raw, err := chainlib.ExecShell(extraStr)
+	if err != nil {
+		log.Printf("[ChainServer] Get expiration transaction and push action failed: %v\n", err)
+		return err
+	}
 
 	var temp ChargeExpirationTable
-	err = json.Unmarshal(raw, &temp)
+	err = json.Unmarshal([]byte(raw), &temp)
 	if err != nil {
+		log.Printf("[ChainServer] Get expiration transaction and unmarsh failed: %v\n", err)
 		return err
 	}
 
@@ -189,7 +199,7 @@ func (tick *ChainServer) pushChargeExpiredTrxs() error {
 		item.From = v.From
 		item.To = v.To
 		item.Amount, _ = strconv.ParseFloat(v.Quantity, 64)
-		item.BlockNum = v.BlockNum
+		item.BlockNum = int64(v.Blocknum)
 		item.IsIrrevisible = true
 		item.Memo = v.Memo
 
@@ -204,15 +214,18 @@ func (tick *ChainServer) pushChargeExpiredTrxs() error {
 }
 
 func (tick *ChainServer) updateexpiretable() error {
+	log.Print("[ChainServer] update expiration table.\n")
 	extraStr := fmt.Sprintf("cldatx push action datxos.extra updateexpire '' -p %s", common.GetCfgProducerName())
 	_, err := chainlib.ExecShell(extraStr)
 	if err != nil {
+		log.Printf("[ChainServer] update expiration table failed: %v\n", err)
 		return err
 	}
 
 	chargStr := fmt.Sprintf("cldatx push action datxos.charg updateexptrx '' -p %s", common.GetCfgProducerName())
 	_, err = chainlib.ExecShell(chargStr)
 	if err != nil {
+		log.Printf("[ChainServer] update expiration table failed: %v\n", err)
 		return err
 	}
 

@@ -75,7 +75,7 @@ var ETHExtractHandler = func(w http.ResponseWriter, r *http.Request) {
 		job.Body = string(bytes)
 
 		if err = delayqueue.Push(job); err != nil {
-			fmt.Printf("Push queue failed.%v\n", err)
+			log.Printf("Push queue failed.%v\n", err)
 			return false, fmt.Sprintf("ETHExtractHandler Push queue err: %v", err)
 		}
 

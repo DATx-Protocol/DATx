@@ -123,20 +123,10 @@ func GetDATXTrxList(account string, pos int64, offset int64) ([]*TrxInfo, error)
 	trxList := make([]*TrxInfo, 0)
 	for _, act := range actions.Actions {
 		var trx TrxInfo
-		switch act.ActionTrace.Act.Token {
-		case "datxos": // 不需要展现
+		if act.ActionTrace.Act.Name != "transfer" {
 			continue
-		case "datxos.token":
-			trx.Token = "DATX"
-		case "datxos.dbtc":
-			trx.Token = "DBTC"
-		case "datxos.deth":
-			trx.Token = "DETH"
-		case "datxos.deos":
-			trx.Token = "DEOS"
-		default:
-			trx.Token = act.ActionTrace.Act.Token
 		}
+		trx.Token = QuantityToToken(act.ActionTrace.Act.Data.Quantity)
 		trx.Trxid = act.ActionTrace.Trxid
 		trx.Quantity = act.ActionTrace.Act.Data.Quantity
 		trx.Blocknum = act.Blocknum

@@ -19,6 +19,8 @@ func main() {
 		}
 	}()
 
+	log.SetFlags(log.LstdFlags | log.Lmicroseconds)
+
 	//start delay queue
 	delayqueue.InitQueue()
 
@@ -48,7 +50,7 @@ func main() {
 
 	eosAccount := common.GetTrusteeAccount("eos-muladdress")
 	log.Printf("main get eos trustee account: %s\n", eosAccount)
-	eos := gatway.NewEOSBrowser(eosAccount, chainserver)
+	eos := gatway.NewEOSNode("http://127.0.0.1:8888", eosAccount, chainserver)
 	chainserver.AddBrowser("EOS", eos)
 
 	//start http server

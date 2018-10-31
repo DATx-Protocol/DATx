@@ -105,14 +105,14 @@ func GetProducerSchedule() ([]Producers, error) {
 		return nil, err
 	}
 
-	fmt.Println(string(body))
+	log.Println(string(body))
 
 	var resut ProducerSchedule
 	if err := json.Unmarshal(body, &resut); err != nil {
 		return nil, err
 	}
 
-	fmt.Printf("data:%v\n", resut.Active.Producers)
+	log.Printf("data:%v\n", resut.Active.Producers)
 	return resut.Active.Producers, nil
 }
 
@@ -145,10 +145,10 @@ func GetInfo() (*ChainInfo, error) {
 
 	blockTime, err := time.Parse("2006-01-02T15:04:05", resut.HeadBlockTime)
 	if err != nil {
-		fmt.Printf("Parase time err: %v\n", err)
+		log.Printf("Parase time err: %v\n", err)
 		return nil, err
 	}
-	fmt.Printf("GetInfo:%v %v %v\n", resut.HeadBlockProducer, blockTime.Unix(), time.Now().Unix())
+	log.Printf("GetInfo:%v %v %v\n", resut.HeadBlockProducer, blockTime.Unix(), time.Now().Unix())
 	return &resut, nil
 }
 
@@ -177,46 +177,56 @@ func IsCurrentProducer() bool {
 
 //GetExtractActions get transaction by escrow account(*dbtc,deth,deos) when extracting
 func GetExtractActions(addr string, pos, offset int32) ([]chainlib.Transaction, error) {
-	reqpara := ActionsParams{
-		AccountName: addr,
-		Pos:         pos,
-		Offset:      offset,
-	}
-	req, err := json.Marshal(reqpara)
-	if err != nil {
-		return nil, err
-	}
+	// reqpara := ActionsParams{
+	// 	AccountName: addr,
+	// 	Pos:         pos,
+	// 	Offset:      offset,
+	// }
+	// req, err := json.Marshal(reqpara)
+	// if err != nil {
+	// 	return nil, err
+	// }
 
-	para := bytes.NewBuffer([]byte(req))
-	request, err := http.NewRequest("POST", "http://127.0.0.1:8888/v1/history/get_actions", para)
-	if err != nil {
-		return nil, err
-	}
-	request.Header.Set("Content-type", "application/json")
+	// para := bytes.NewBuffer([]byte(req))
+	// request, err := http.NewRequest("POST", "http://127.0.0.1:8888/v1/history/get_actions", para)
+	// if err != nil {
+	// 	return nil, err
+	// }
+	// request.Header.Set("Content-type", "application/json")
 
-	client := &http.Client{}
-	response, errr := client.Do(request)
-	if errr != nil {
-		return nil, err
-	}
-	if response.StatusCode != 200 {
-		return nil, fmt.Errorf("ChainAPI Response error: %v\n", response.Status)
-	}
+	// client := &http.Client{}
+	// response, errr := client.Do(request)
+	// if errr != nil {
+	// 	return nil, err
+	// }
+	// if response.StatusCode != 200 {
+	// 	return nil, fmt.Errorf("ChainAPI Response error: %v\n", response.Status)
+	// }
 
-	body, err := ioutil.ReadAll(response.Body)
+	// body, err := ioutil.ReadAll(response.Body)
+	// if err != nil {
+	// 	return nil, err
+	// }
+
+	cmdStr := fmt.Sprintf("cldatx get actions %s -j %d %d", addr, pos, offset)
+
+	log.Printf("\n****************************************\n%s\n****************************************\n", cmdStr)
+	res, err := chainlib.ExecShell(cmdStr)
 	if err != nil {
+		log.Printf("\nGetAccountActions get actions return: %s\n", err)
 		return nil, err
 	}
 
 	var resp ExtractActions
-	if err := json.Unmarshal(body, &resp); err != nil {
+	if err := json.Unmarshal([]byte(res), &resp); err != nil {
 		return nil, err
 	}
 
 	lastIrreversibleBlock := int64(resp.LastIrreversibleBlock)
 	result := make([]chainlib.Transaction, 0)
 	for _, v := range resp.Actions {
-		if v.ActionTrace.Act.Name != "transfer" {
+		log.Printf("trx: %v\n", v)
+		if v.ActionTrace.Act.Name != "extract" {
 			continue
 		}
 

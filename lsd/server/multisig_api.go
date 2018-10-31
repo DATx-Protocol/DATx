@@ -2,6 +2,7 @@ package server
 
 import (
 	"datx/lsd/chainlib"
+	"datx/lsd/common"
 	"fmt"
 	"io/ioutil"
 	"log"
@@ -10,7 +11,7 @@ import (
 
 //btc multisig
 func BTCMultiSig(trx chainlib.Transaction) (string, error) {
-	url := "https://localhost:8080/btc/withdraw?isTestnet=1&to=" + trx.To + "&value=" + fmt.Sprintf("%f", trx.Amount) + "&fee=100000&trxid=" + trx.TransactionID
+	url := fmt.Sprintf("https://localhost:8080/btc/withdraw?isTestnet=1&to=%s&value=%s&fee=100000&trxid=%s&nodeName=%s", trx.To, fmt.Sprintf("%f", trx.Amount), trx.TransactionID, common.GetCfgProducerName())
 
 	resp, err := http.Get(url)
 	if err != nil {
@@ -34,7 +35,7 @@ func BTCMultiSig(trx chainlib.Transaction) (string, error) {
 
 //eth multisig
 func ETHMultiSig(trx chainlib.Transaction) (string, error) {
-	url := "https://localhost:8080/eth/withdraw?to=" + trx.To + "&value=" + fmt.Sprintf("%f", trx.Amount) + "&data=" + trx.Memo + "&trxid=" + trx.TransactionID
+	url := fmt.Sprintf("https://localhost:8080/eth/withdraw?to=%s&value=%s&data=%s&trxid=%s&nodeName=%s", trx.To, fmt.Sprintf("%f", trx.Amount), trx.Memo, trx.TransactionID, common.GetCfgProducerName())
 
 	resp, err := http.Get(url)
 	if err != nil {
@@ -58,7 +59,7 @@ func ETHMultiSig(trx chainlib.Transaction) (string, error) {
 
 //eos multisig
 func EOSMultiSig(trx chainlib.Transaction) (string, error) {
-	url := "https://localhost:8080/eos/withdraw?to=" + trx.To + "&value=" + fmt.Sprintf("%f EOS", trx.Amount) + "&trxid=" + trx.TransactionID
+	url := fmt.Sprintf("https://localhost:8080/eos/withdraw?to=%s&value=%s&trxid=%s&nodeName=%s", trx.To, fmt.Sprintf("%f EOS", trx.Amount), trx.TransactionID, common.GetCfgProducerName())
 
 	resp, err := http.Get(url)
 	if err != nil {
