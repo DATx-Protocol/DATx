@@ -154,11 +154,11 @@ exports.getConfigFile = function(){
         'eth-muladdress = 0xF6Bb0E08E268Eb2826C076dEFbFf24283694a63c \n' + 
         'eth-gasprice = 2000000000 \n' + 
         'eth-gaslimit = 300000 \n' + 
-        'eos-chainid = cf057bbfb72640471fd910bcb67639c22df9f92470936cddc1ade0e2f2e7dc4f \n' + 
-        'eos-endpoint = http://127.0.0.1:8888 \n' + 
+        'eos-chainid = 038f4b0fc8ff18a4f0842a8f0564611f6e96e8535901dd45e43ac8691a1c4dca \n' + 
+        'eos-endpoint = http://jungle.cryptolions.io:18888 \n' + 
         'eos-account = alice \n' + 
         'eos-privateKey = 5JvJVQwFSYRbVncoKi3HwbN85vW3x3dmm9TkVpXALJgJCUXLFia \n' + 
-        'eos-mulAccount = jacky \n' + 
+        'eos-mulAccount = datxmultisig \n' + 
         'listen-server-endpoint = http://127.0.0.1:8880 \n' + 
         'across-chain-endpoint = https://127.0.0.1:8080 \n' +
         'across-chain-cfg-flag = 1');
@@ -166,4 +166,11 @@ exports.getConfigFile = function(){
         __ini = exports.loadFileSync(cfgFile)
     }
     return __ini;
+}
+
+exports.getWallet = function(){
+    let walletCfgFile = os.homedir + "/datxos-wallet/wallet_password.ini";
+    __ini_wallet = exports.loadFileSync(walletCfgFile);
+
+    return {wname : __ini_wallet["wallet-namer"], wpassword : __ini_wallet["wallet-password"]};
 }

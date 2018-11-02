@@ -5,9 +5,9 @@ const se = INI.getConfigFile();
 
 const BigNumber = require("bignumber.js")
 
-const chainid = se["eos-chainid"];
+const chainId = se["eos-chainid"];
 const httpEndpoint = se["eos-endpoint"];
-const eos = Eos({httpEndpoint, chainid, keyProvider: () => userProvidedKey});
+const eos = Eos({httpEndpoint, chainId, keyProvider: () => userProvidedKey});
 
 let userProvidedKey = null;
 

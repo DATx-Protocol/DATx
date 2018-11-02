@@ -10,6 +10,8 @@ const se = INI.getConfigFile();
 const httpClient = require('./client.js');
 const redis = require('./redis.js');
 
+const exec = require('child_process').exec;
+
 // The callback to handle requests
 function handler(request, response) {
   try {
@@ -101,8 +103,6 @@ function handler(request, response) {
     else if (pathName == '/btc/withdraw'){
       var IsTestnet = 0;
       var trxid = '';
-      var to = '';
-      var value = 0;
       var fee = 0;
       var nodeName = '';
       var sign = '';
@@ -113,23 +113,22 @@ function handler(request, response) {
           IsTestnet = 1;
         }
         trxid = params.trxid;
-        to = params.to;
-        value = params.value;
         fee = params.fee;
         nodeName = params.nodeName;
         sign = params.sign;
-        if(!trxid|| !to || !value){
+        if(!trxid){
           throw new Error('invalid params');
         }
         else{
           (async function(){
           try{ 
-            var checkData = to + value + fee + trxid + isTestnet ;
+            let {to,value,symbol} = await checkDATXWithdraw(trxid);
+            var checkData = fee + trxid + IsTestnet ;
             var checkResult = await checkRequestSIgn(nodeName,sign,checkData);
             if(!checkResult){
               throw new Error('invalid sign');
             }
-            checkResult = await checkDATXWithdraw(trxid,to,value + ' DBTC')
+            checkResult = symbol == 'DBTC';
             if(!checkResult){
               throw new Error('transcation rejected');
             }
@@ -143,6 +142,7 @@ function handler(request, response) {
             var trx = await bitcoinapi.buildTrx(se["btc-muladdress"],to,parseInt(value * 1e8),fee,{IsTestnet:IsTestnet},trxid); 
 
             //call other nodes
+            runDatxCmd("cldatx push action datxos.extra setdoing '[\"" + trxid + "\",\"" + nodeName + "\",\"" + se["producer-name"] + "\"]' -p " + se["producer-name"]);
             var trxSerialize = await btcGatherSign(trx.toHex(),trxid,IsTestnet);
 
             //broadcast
@@ -154,7 +154,7 @@ function handler(request, response) {
             response.write(result);
             response.end();
           }catch(e){
-            response.writeHead(200);
+            response.writeHead(500);
             response.write('Error:' + e.toString());
             response.end();
           }
@@ -171,6 +171,7 @@ function handler(request, response) {
       var sign = '';
       var script = se["btc-mulscript"];
       var query = url.parse(request.url).query;
+      console.log(request.url);
       if(query){
         var params = querystring.parse(query)
         if(params.isTestnet == 1){
@@ -186,7 +187,7 @@ function handler(request, response) {
         else{
           (async function(){
           try{
-            var checkData = trxSerialize + trxid + isTestnet; 
+            var checkData = trxSerialize + trxid + IsTestnet; 
             var checkResult = await checkRequestSIgn(nodeName,sign,checkData);
             if(!checkResult){
               throw new Error('invalid sign');
@@ -213,19 +214,21 @@ function handler(request, response) {
                 refTrx = await bitcoinapi.getTrxDetail(input.txid,{IsTestnet:IsTestnet});
                 if(refTrx.result == false) throw new Error('transcation rejected');
                 refTrx = JSON.parse(refTrx.data);
-                if(refTrx.outs[input.n].addr != se["btc-muladdress"]) throw new Error('transcation rejected');
-                sum += Number(refTrx.outs[input.n].value);
+                if(refTrx.out[input.n].addr != se["btc-muladdress"]) throw new Error('transcation rejected');
+                sum += Number(refTrx.out[input.n].value);
               }
 
               if(outs.length != 3) throw new Error('transcation rejected');
-              if(outs[1].addresses[0] != se["btc-muladdress"])  throw new Error('transcation rejected');
+              if(outs[1].scriptPubKey.addresses[0] != se["btc-muladdress"])  throw new Error('transcation rejected');
               if(bitcoinapi.decodeMemo(outs[2].scriptPubKey.hex) != trxid) throw new Error('transcation rejected');
               
-              var to = outs[0].addresses[0];
+              var to1 = outs[0].scriptPubKey.addresses[0];
               var fee = sum - outs[0].satoshi - outs[1].satoshi;
-              var value = outs[0].satoshi;
+              var value1 = outs[0].satoshi;
               if(fee > Number(se["btc-maxfee"])) throw new Error('transcation rejected');
-              checkResult = await checkDATXWithdraw(trxid,to,parseFloat((value+fee)/1e8).toFixed(4) + ' DBTC');
+
+              let {to,value,symbol} = await checkDATXWithdraw(trxid);
+              checkResult = (to1 == to && value == parseFloat((value1+fee)/1e8).toFixed(4) && symbol == 'DBTC')
               if(!checkResult)  throw new Error('transcation rejected');
             }
             else{
@@ -251,19 +254,21 @@ function handler(request, response) {
             trx = await bitcoinapi.signTrx(trx,se["btc-wif"],script,{IsTestnet:IsTestnet});
             trxSerialize = trx.toHex();
             redis.client.set(trxid,trxSerialize);
-
+ 
             response.writeHead(200);
             response.write(trxSerialize);
             response.end();
 
             //call other nodes
             if(isFirst){
-              trxSerialize = await btcGatherSign(trxSerialize,trxid,isTestnet);
+              runDatxCmd("cldatx push action datxos.extra setdoing '[\"" + trxid + "\",\"" + nodeName + "\",\"" + se["producer-name"] + "\"]' -p " + se["producer-name"]);
+
+              trxSerialize = await btcGatherSign(trxSerialize,trxid,IsTestnet);
               trx = bitcoinapi.getTrxFromHex(trxSerialize);
               result = await bitcoinapi.broadcastTrx(trx); 
             }
           }catch(e){
-            response.writeHead(200);
+            response.writeHead(500);
             response.write('Error:' + e.toString());
             response.end();
           }
@@ -290,8 +295,6 @@ function handler(request, response) {
       var myAddr = se["eth-myaddress"];
       var contractAddr = se["eth-muladdress"];
       var myPrivatekey = se["eth-privatekey"];
-      var to = '';
-      var value = '';
       var trxid = '';
       var sign = '';
       var nodeName  = '';
@@ -299,19 +302,18 @@ function handler(request, response) {
       var query = url.parse(request.url).query;
       if(query){
         var params = querystring.parse(query)
-        to = params.to;
-        value = Number(params.value);
         trxid = params.trxid;
         sign = params.sign;
         nodeName = params.nodeName;
         isInform = params.isInform;
-        if(!to || !value){
+        if(!trxid){
           throw new Error('invalid params');
         }
         else{
           (async function(){
           try{
             //do some check
+            let {to,value,symbol} = await checkDATXWithdraw(trxid);
             var checkData = to + value + trxid;
             var checkResult = await checkRequestSIgn(nodeName,sign,checkData);
             if(!checkResult){
@@ -321,7 +323,7 @@ function handler(request, response) {
               throw new Error('handled trx id');
             }
 
-            checkResult = await checkDATXWithdraw(trxid,to,value + ' DETH')
+            checkResult = symbol == 'DETH';
             if(!checkResult)  throw new Error('transcation rejected');
 
             //check 提币权
@@ -344,6 +346,7 @@ function handler(request, response) {
               }
             }
             else{
+              runDatxCmd("cldatx push action datxos.extra setdoing '[\"" + trxid + "\",\"" + nodeName + "\",\"" + se["producer-name"] + "\"]' -p " + se["producer-name"]);
               ethapi.withdraw(myAddr,contractAddr,to,parseInt(value*1e18),myPrivatekey,ethapi.fromAscii(trxid));
             }
 
@@ -352,7 +355,7 @@ function handler(request, response) {
             response.write('success');
             response.end();
           }catch(e){
-            response.writeHead(200);
+            response.writeHead(500);
             response.write('Error:' + e.toString());
             response.end();
           }
@@ -362,59 +365,59 @@ function handler(request, response) {
     }
 
     //createAccount
-    else if(pathName == '/eos/createAccount'){
-      var creator = '';
-      var creatorKey = '';
-      var accountName = '';
-      var auth = '';
-      var query = url.parse(request.url).query;
-      if(query){
-        var params = querystring.parse(query)
-        creator = params.creator;
-        creatorKey = params.creatorKey;
-        accountName = params.accountName;
-        auth = JSON.parse(auth);
-        if(!creator || !creatorKey || !accountName || !auth){
-          throw new Error('invalid params');
-        }
-        else{
-          (async function(){
-            var result = await eosapi.createAccount(creator,creatorKey,accountName,auth);
+    // else if(pathName == '/eos/createAccount'){
+    //   var creator = '';
+    //   var creatorKey = '';
+    //   var accountName = '';
+    //   var auth = '';
+    //   var query = url.parse(request.url).query;
+    //   if(query){
+    //     var params = querystring.parse(query)
+    //     creator = params.creator;
+    //     creatorKey = params.creatorKey;
+    //     accountName = params.accountName;
+    //     auth = JSON.parse(auth);
+    //     if(!creator || !creatorKey || !accountName || !auth){
+    //       throw new Error('invalid params');
+    //     }
+    //     else{
+    //       (async function(){
+    //         var result = await eosapi.createAccount(creator,creatorKey,accountName,auth);
 
-            response.writeHead(200,{'Content-Type': 'application/json'});
-            response.write(JSON.stringify(result));
-            response.end();
-          })();
-        }
-      }
-    }
+    //         response.writeHead(200,{'Content-Type': 'application/json'});
+    //         response.write(JSON.stringify(result));
+    //         response.end();
+    //       })();
+    //     }
+    //   }
+    // }
 
     //issue
-    else if(pathName == '/eos/issue'){
-      var to = '';
-      var value = '';
-      var memo = '';
-      query = url.parse(request.url).query;
-      if(query){
-        var params = querystring.parse(query);
-        to = params.to;
-        value = params.value;
-        memo = params.memo;
-        if(!to || !value){
-          throw new Error('invalid params');
-        }
-        else{
-          (async function(){
-            var result = await eosapi.issue(to,value,memo);
+    // else if(pathName == '/eos/issue'){
+    //   var to = '';
+    //   var value = '';
+    //   var memo = '';
+    //   query = url.parse(request.url).query;
+    //   if(query){
+    //     var params = querystring.parse(query);
+    //     to = params.to;
+    //     value = params.value;
+    //     memo = params.memo;
+    //     if(!to || !value){
+    //       throw new Error('invalid params');
+    //     }
+    //     else{
+    //       (async function(){
+    //         var result = await eosapi.issue(to,value,memo);
 
-            response.writeHead(200,{'Content-Type': 'application/json'});
-            response.write(JSON.stringify(result));
-            response.end();
-          })();
+    //         response.writeHead(200,{'Content-Type': 'application/json'});
+    //         response.write(JSON.stringify(result));
+    //         response.end();
+    //       })();
           
-        }
-      }
-    }
+    //     }
+    //   }
+    // }
 
     else if(pathName == '/eos/getAccount'){
       response.writeHead(200);
@@ -428,32 +431,29 @@ function handler(request, response) {
       var ProvidedKey = se["eos-privateKey"]
       var auths = []; //根据见证节点组合成的权限要求
       var MultiSigAccount = se["eos-mulAccount"]; 
-      var to = '';
-      var value = '';
       var trxid = '';
       var sign = '';
       var nodeName = '';
       var query = url.parse(request.url).query;
       if(query){
         var params = querystring.parse(query);
-        to = params.to;
-        value = params.value;
         trxid = params.trxid;
         sign = params.sign;
         nodeName = params.nodeName;
-        if(!to || !value || !trxid){
+        if(!trxid){
           throw new Error('invalid params');
         }
         else{
           (async function(){
           try{
             //check 
+            let {to,value,symbol} = await checkDATXWithdraw(trxid);
             var checkData = to + value + trxid;
             var checkResult = await checkRequestSIgn(nodeName,sign,checkData);
             if(!checkResult){
               throw new Error('invalid sign');
             }
-            checkResult = await checkDATXWithdraw(trxid,to,value + ' DEOS')
+            checkResult = symbol == 'DEOS';
             if(!checkResult)  throw new Error('transcation rejected');
 
             //check 提币权
@@ -479,7 +479,7 @@ function handler(request, response) {
                 auths.push({actor: result.data, permission: 'active'});
               }
             }
-      
+            runDatxCmd("cldatx push action datxos.extra setdoing '[\"" + trxid + "\",\"" + nodeName + "\",\"" + se["producer-name"] + "\"]' -p " + se["producer-name"]);
             var proposeName = await eosapi.propose(proposer,MultiSigAccount,to,value + ' EOS',trxid,auths,ProvidedKey);
             //broadcast to other nodes
             for (var i = 0; i < verifyNodes.length; i++){
@@ -509,7 +509,7 @@ function handler(request, response) {
             }
             response.end();
           }catch(e){
-            response.writeHead(200);
+            response.writeHead(500);
             response.write('Error:' + e.toString());
             response.end();
           }
@@ -558,22 +558,23 @@ function handler(request, response) {
             var check = await eosapi.getProposeAction(proposer,proposeName);
             if(!check.result) throw new Error(check.data);
             var action = JSON.parse(check.data);
-            var to = action.to;
+            var to1 = action.to;
             var from = action.from;
             var quantity = action.quantity;
 
             if(from != se["eos-mulAccount"])  throw new Error('transcation rejected');
-            var checkResult = await checkDATXWithdraw(trxid,to,quantity.replace('EOS','DEOS'));
+            let{to,value,symbol} = await checkDATXWithdraw(trxid);
+            var checkResult = (to == to1 && quantity == value1.toString() + ' ' + symbol.replace('D',''));
             if(!checkResult)  throw new Error('transcation rejected');
 
             var result = await eosapi.confirm(proposer,proposeName,se["eos-account"],se["eos-privateKey"]);
-
+            runDatxCmd("cldatx push action datxos.extra setdoing '[\"" + trxid + "\",\"" + nodeName + "\",\"" + se["producer-name"] + "\"]' -p " + se["producer-name"]);
             redis.client.set(trxid,"done");
             response.writeHead(200,{'Content-Type': 'application/json'});
             response.write(JSON.stringify(result));
             response.end();
           }catch(e){
-            response.writeHead(200);
+            response.writeHead(500);
             response.write('Error:' + e.toString());
             response.end();
           }
@@ -583,7 +584,7 @@ function handler(request, response) {
     }
   }
   catch (e) {
-    response.writeHead(200);
+    response.writeHead(500);
     response.write('Error:' + e.toString());
     response.end();
   }
@@ -599,20 +600,20 @@ function sleep(time) {
 
 async function getVerifiers(){
   //return [{owner:'ddd',url:'https://127.0.0.1:8080'},{owner:'ccc',url:'https://127.0.0.1:8081'}]
-  var verifyNodes = await httpClient.requestWithOvertime(se["http-server-address"] + '/v1/chain/get_table_rows',3000,'POST',
+  var verifyNodes = await httpClient.requestWithOvertime('http://' + se["http-server-address"] + '/v1/chain/get_table_rows',3000,'POST',
     '{"scope":"datxos","code":"datxos","table":"verifiers","json":"true","limit":30}');
-  verifyNodes = JSON.parse(verifyNodes).rows;
+  verifyNodes = JSON.parse(verifyNodes.data).rows;
   return verifyNodes;
 }
 
 async function getProducers(){
-  var produceNodes = await httpClient.requestWithOvertime(se["http-server-address"] + '/v1/chain/get_table_rows',3000,'POST',
+  var produceNodes = await httpClient.requestWithOvertime('http://' + se["http-server-address"] + '/v1/chain/get_table_rows',3000,'POST',
     '{"scope":"datxos","code":"datxos","table":"producer","json":"true","limit":30}');
-  produceNodes = JSON.parse(produceNodes).rows;
+  produceNodes = JSON.parse(produceNodes.data).rows;
   return produceNodes;
 }
 
-async function btcGatherSign(trxSerialize,trxid,isTestnet){
+async function btcGatherSign(trxSerialize,trxid,IsTestnet){
   var trx = bitcoinapi.getTrxFromHex(trxSerialize);
   var verifyNodes = await getVerifiers();
   for(var i = 0;i < verifyNodes.length;i++){
@@ -621,10 +622,10 @@ async function btcGatherSign(trxSerialize,trxid,isTestnet){
       trxSerialize = trx.toHex();
       continue;
     };
-    var checkData = trxSerialize + trxid + isTestnet; 
+    var checkData = trxSerialize + trxid + IsTestnet; 
     var sign = eosapi.EccSIgn(checkData,se["signature-provider"].toString().split('KEY:')[1]);
     var URL = verifyNodes[i].url + '/btc/signTrx?trxid=' + trxid + '&trxSerialize=' + trxSerialize + '&isTestnet=' + IsTestnet +  '&nodeName=' + se["producer-name"] + '&sign=' + sign;
-    var result = await httpClient.requestWithOvertime(URL,3000,'GET');
+    var result = await httpClient.requestWithOvertime(URL,10000,'GET');
     if(result.result){               
       //check return trx
       var isSame = false;
@@ -662,29 +663,32 @@ async function btcGatherSign(trxSerialize,trxid,isTestnet){
   return trxSerialize;
 }
 
-async function checkDATXWithdraw(trxid,to,value){
+async function checkDATXWithdraw(trxid){
   try
   {
-    var URL = se["http-server-address"] + '/v1/history/get_transaction';
+    let to = "";
+    let value = 0;
+    let symbol = "";
+    var URL ='http://' + se["http-server-address"] + '/v1/history/get_transaction';
     var result = await httpClient.requestWithOvertime(URL,5000,'POST','{"id":"' + trxid +'"}');
-    result = json.parse(result);
+
     if(result.result){
       var trx = JSON.parse(result.data);
-      if(trx.trx.trx.actions[0].data.quantity == value){
-        if(trx.trx.trx.actions[0].data.memo == to){
-          return true;
-        }
-      }
+      let quantity = trx.trx.trx.actions[0].data.quantity;
+      to = trx.trx.trx.actions[0].data.memo;
+      value = parseFloat(quantity.split(' ')[0]).toFixed(4);
+      symbol = quantity.split(' ')[1];
     }
-    return false;
+    return {to:to,value:value,symbol:symbol};
   }
   catch(e)
   {
-    return false
+    return {to:"",value:"",symbol:""};
   }
 }
 
 async function checkRequestSIgn(nodeName,sign,data){
+  return true;
   if(!nodeName) return false;
 
   var verifyNodes = await getVerifiers();
@@ -707,21 +711,52 @@ async function checkRequestSIgn(nodeName,sign,data){
 
 async function checkExtractRight(nodeName,trxid){
   try{
-    var records = await httpClient.requestWithOvertime(se["http-server-address"] + '/v1/chain/get_table_rows',3000,'POST',
-    '{"scope":"extract","code":"extract","table":"record","json":"true","limit":3000}');
-    records = JSON.parse(records).rows;
-    
-    records.array.forEach(record => {
-      if(record.trxid == trxid){
-        return nodeName == record.producer;
+    return true;
+    var records = await httpClient.requestWithOvertime('http://' + se["http-server-address"] + '/v1/chain/get_table_rows',3000,'POST',
+    '{"scope":"datxos.extra","code":"datxos.extra","table":"record","json":"true","limit":3000}');
+    records = JSON.parse(records.data).rows;
+
+    for(let i = 0;i<records.length;i++){
+      if(records[i].trxid == trxid){
+        return nodeName == records[i].producer;
       }
-    });
+    }
     
     return false;
   }
   catch(e){
     return false;
   }
+}
+
+function runDatxCmd(cli){
+
+  exec(cli,{encoding:'utf8'},function (err,stdout,stderr){
+    if (err){
+        if(err.message.indexOf('Locked wallet') !== -1){
+          let {wname,wpassword} = INI.getWallet();
+          exec('cldatx wallet unlock -n ' + wname + ' --password ' + wpassword,{encoding:'utf8'},function (err,stdout,stderr){
+            if(err){
+                return err.message;
+            }else{
+                exec(cli,{encoding:'utf8'},function (err,stdout,stderr){
+                    if(err){
+                        return err.message;
+                    }
+                    else{
+                        return stdout;
+                    }
+                });
+            }
+          });
+        }else{
+            return err.message;
+        }
+    }else{
+        return stdout;
+    }
+    
+  })
 }
 
 module.exports = {

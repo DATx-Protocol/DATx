@@ -8,7 +8,7 @@
             "type": "node",
             "request": "launch",
             "name": "Launch",
-            "program": "${workspaceFolder}/test/testeos.js"
+            "program": "${workspaceFolder}/bin/start.js"
         }
     ]
 }

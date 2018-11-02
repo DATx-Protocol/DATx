@@ -1,7 +1,8 @@
 #! /bin/bash
 
-rm -rf ./build/*
-rm -rf ./node_mudules/*
+rm -rf package-lock.json
+rm -rf ./build/
+rm -rf ./node_modules/
 
 echo "start install node packages....."
 npm install  -g node-gyp 
@@ -33,5 +34,12 @@ buildDir="${pwd}/build"
 mkdir -p $buildDir
 
 mv -f  mse  $buildDir
+
+if [ -f "$buildDir/mse" ] ;then
+    chmod +x "$buildDir/mse"
+else
+    echo "mse build error"
+    exit
+fi
 
 echo "build successful, see build floder"

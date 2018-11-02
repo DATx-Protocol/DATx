@@ -225,7 +225,7 @@ function decodeOutput(tx, options){
           scriptPubKey: {
               asm: bitcoin.script.toASM(out.script),
               hex: out.script.toString('hex'),
-              type: bitcoin.classify.output(out.script),
+              type: bitcoin.script.classifyOutput(out.script),
               addresses: [],
           },
       };

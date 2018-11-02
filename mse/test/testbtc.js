@@ -70,7 +70,7 @@
 // (async function(){
 //     script = '522103a4ac53ded034de0ce8e1a5aa8cae967a7c33f8ef807ee31d0a972fbcd912c8cb21038e6c355aa3a7b0a3338215e1fb952c1c255eab07012c800a151f8fd7bb9feac92102c8a936b526d91e6047569ec8fd53779a2368a150d63cea655fc9c7ba66d2199e53ae'
 //     //buildTrx
-//     trx = await bitcoinapi.buildTrx('2MsimupueVskjJMy79kKGP5uzfCWfZuK8TD','myDAgFpwT3sTkppYKeS6LwKMCipM218EKE',2e3,1e3,{IsTestnet:1})
+//     trx = await bitcoinapi.buildTrx('2MsimupueVskjJMy79kKGP5uzfCWfZuK8TD','myDAgFpwT3sTkppYKeS6LwKMCipM218EKE',100e3,1e3,{IsTestnet:1},'trxid')
 
 //     //sign locally
 //     trx = await bitcoinapi.signTrx(trx,'cV6dJVkPZfmmDg5XHNpExd8fgMTaoYgv7NusH26ZEFj2vcA9xvhz',script,{IsTestnet:1})

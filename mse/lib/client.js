@@ -12,6 +12,7 @@ function requestWithOvertime(url, interval,method,body) {
 
     request(options, function (error, response, body) {
       if (error) resolve({result: false, errmsg: error.message});
+      else if (response.statusCode != 200) resolve({result: false, errmsg: body});
       resolve({result: true, data: body});
     });
 

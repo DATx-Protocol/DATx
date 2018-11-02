@@ -41,12 +41,12 @@ const httpClient = require('../lib/client');
             {
                 const killtimer = setTimeout(() => {
                     process.exit(1);
-                }, 30000);
+                }, 2000);
                 killtimer.unref();
                 
                 server.close();
 
-                cluster.worker.disconnect();
+                //cluster.worker.disconnect();
 
                 res.statusCode = 500;
                 res.setHeader('content-type', 'text/plain');
