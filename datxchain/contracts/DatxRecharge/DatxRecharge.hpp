@@ -7,14 +7,14 @@ namespace datxos
 using std::string;
 class recharge : public contract
 {
-  private:
-    void expired_trx();
+  
+  
   public:
     recharge(account_name self) : contract(self) {}
 
     static key256 get_hash(const checksum256& hash) {
             const uint64_t *p64 = reinterpret_cast<const uint64_t *>(&hash);
-            return key256::make_from_word_sequence<uint64_t>(p64[0], p64[1], p64[2], p64[3]);
+            return datxos::key256::make_from_word_sequence<uint64_t>(p64[0], p64[1], p64[2], p64[3]);
          }
 
     /// @abi action
@@ -32,6 +32,10 @@ class recharge : public contract
                 string quantity,
                 string category,
                 string memo);
+
+    /// @abi action
+    void updateexptrx();
+
     public:
      /// @abi table
      struct user
@@ -73,22 +77,6 @@ class recharge : public contract
     typedef multi_index<N(record), record,
                         indexed_by<N(data), const_mem_fun<record, key256, &record::by_data>>> records;
 
-    /// @abi table
-        struct countrecord
-        {
-            uint64_t id; //primary key
-            checksum256 data;
-            int8_t count;
-            uint64_t primary_key() const { return id; }
-            key256 by_data() const {return get_hash(data);}
-            DATXLIB_SERIALIZE(countrecord, (id)(data)(count));
-        };
-
-        typedef multi_index<N(countrecord),countrecord,
-                            indexed_by<N(data), const_mem_fun<countrecord, key256, &countrecord::by_data>>> countrecords;
-
-
-
     ///@abi table
     struct expiration
     {
@@ -101,9 +89,10 @@ class recharge : public contract
         string category;
         string memo;
         checksum256 data;
+        int8_t count;
         uint64_t primary_key() const { return id; }
         key256 by_data() const {return get_hash(data);}
-        DATXLIB_SERIALIZE(expiration, (id)(trxid)(from)(to)(blocknum)(quantity)(category)(memo)(data));
+        DATXLIB_SERIALIZE(expiration, (id)(trxid)(from)(to)(blocknum)(quantity)(category)(memo)(data)(count));
     };
 
     typedef multi_index<N(expiration), expiration,

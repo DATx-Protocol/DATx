@@ -87,27 +87,28 @@ void token::transfer( account_name from,
     add_balance( to, quantity, from );
 }
 
-void token::extract( account_name from,
+void token::extract( account_name  from,
                       account_name to,
                       asset        quantity,
                       string       memo )
 {
-    datxos_assert( from != to, "cannot transfer to self" );
+   datxos_assert( from != to, "cannot transfer to self" );
     require_auth( from );
     datxos_assert( is_account( to ), "to account does not exist");
+    if (to!= N(datxos.dbtc)&&to!= N(datxos.deth) &&to!= N(datxos.deos)){
+        datxos_assert(false, "the to is not  the extract address!.");
+    }
     auto sym = quantity.symbol.name();
     stats statstable( _self, sym );
     const auto& st = statstable.get( sym );
-
+    
     require_recipient( from );
     require_recipient( to );
-
+    
     datxos_assert( quantity.is_valid(), "invalid quantity" );
     datxos_assert( quantity.amount > 0, "must transfer positive quantity" );
     datxos_assert( quantity.symbol == st.supply.symbol, "symbol precision mismatch" );
     datxos_assert( memo.size() <= 256, "memo has more than 256 bytes" );
-
-
     sub_balance( from, quantity );
     add_balance( to, quantity, from );
 
@@ -118,14 +119,21 @@ void token::extract( account_name from,
     datxos_assert( size == read, "read_transaction failed");
     sha256(buf, read, &h);
 
-
+    uint64_t v = quantity.symbol.value;
+    v >>= 8;
+    string result;
+    while (v > 0) {
+            char c = static_cast<char>(v & 0xFF);
+            result += c;
+            v >>= 8;
+    }
      transrecords trx_table(_self,_self);
-
         trx_table.emplace(_self, [&](auto &t) {
             t.id= trx_table.available_primary_key();
             t.trxid=h;
-            t.category=quantity.symbol;
+            t.category=result;
             t.account=from;
+            t.quantity=quantity;
             t.memo=memo;
         });    
 
