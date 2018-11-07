@@ -95,7 +95,6 @@ func ParseTrxID(inStr string) (string, error) {
 
 // ExecShell ...
 func ExecShell(command string) (string, error) {
-	// log.Printf("\n****************************************\n%s\n****************************************\n", command)
 	cmd := exec.Command("/bin/bash", "-c", command)
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout = &stdout
@@ -121,7 +120,7 @@ func ClPushAction(account, action, data, permission string) (string, error) {
 	log.Printf("\n****************************************\n%s\n****************************************\n", actionstr)
 	result, err := ExecShell(actionstr)
 	if err != nil {
-		if strings.Contains(err.Error(), "Already unlocked") {
+		if strings.Contains(err.Error(), "Locked wallet") {
 			//Ensure that your wallet is unlocked before using it!
 			wname, wpassword := common.GetWalletNameAndPassword()
 			if len(wpassword) == 0 {
@@ -138,9 +137,7 @@ func ClPushAction(account, action, data, permission string) (string, error) {
 			result, err = ExecShell(actionstr)
 		}
 	}
-	if err == nil {
-		log.Printf("\nPushc Action return: %s\n", result)
-	}
+
 	return result, err
 }
 
@@ -227,7 +224,11 @@ func PushCharge(trx Transaction) error {
 	charge.From = trx.From
 	charge.To = trx.To
 	charge.BlockNum = trx.BlockNum
-	charge.Quantity = strconv.FormatFloat(trx.Amount, 'f', 4, 64)
+	amount := int64(10000 * trx.Amount)
+	if amount == 0 {
+		return fmt.Errorf("PushCharge trx amount is zero")
+	}
+	charge.Quantity = strconv.FormatInt(amount, 10)
 	charge.Category = trx.Category
 	charge.Memo = trx.Memo
 

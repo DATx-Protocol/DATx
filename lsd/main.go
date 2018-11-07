@@ -48,7 +48,7 @@ func main() {
 	btc := gatway.NewBTCBrowser(btcAccount, chainserver)
 	chainserver.AddBrowser("BTC", btc)
 
-	eosAccount := common.GetTrusteeAccount("eos-muladdress")
+	eosAccount := common.GetTrusteeAccount("eos-mulAccount")
 	log.Printf("main get eos trustee account: %s\n", eosAccount)
 	eos := gatway.NewEOSNode("http://127.0.0.1:8888", eosAccount, chainserver)
 	chainserver.AddBrowser("EOS", eos)

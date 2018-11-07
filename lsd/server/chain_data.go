@@ -310,6 +310,7 @@ type ChargeExpirationTable struct {
 		Category string `json:"category"`
 		Memo     string `json:"memo"`
 		Data     string `json:"data"`
+		Count    int    `json:"count"`
 	} `json:"rows"`
 	More bool `json:"more"`
 }

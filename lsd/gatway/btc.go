@@ -17,7 +17,7 @@ import (
 const (
 	BTCRetrySeconds    int64 = 1
 	BTCDelaySeconds    int64 = 60
-	BTCIrreversibleCnt int64 = 6
+	BTCIrreversibleCnt int64 = 5
 )
 
 type BTCTrxIn struct {
@@ -167,7 +167,7 @@ func (btc *BTCBrowser) GetTrxs(addr string) ([]chainlib.Transaction, error) {
 			temp.Time = time.Unix(int64(v.Time), 0)
 			temp.Memo = out.Script
 
-			if (latestBlockNum - temp.BlockNum) > BTCIrreversibleCnt {
+			if (latestBlockNum - temp.BlockNum) >= BTCIrreversibleCnt {
 				temp.IsIrrevisible = true
 			}
 
@@ -216,7 +216,7 @@ func (btc *BTCBrowser) Irreversible(blocknum int64) (bool, error) {
 	}
 
 	sub := latest - blocknum
-	if sub > BTCIrreversibleCnt {
+	if sub >= BTCIrreversibleCnt {
 		return true, nil
 	}
 

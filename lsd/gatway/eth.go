@@ -10,6 +10,7 @@ import (
 	"log"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 )
 
@@ -154,20 +155,17 @@ func (eth *ETHBrowser) GetTrxs(account string, startpos, endpos int64) ([]chainl
 		if err != nil {
 			return nil, err
 		}
-		if v.From[0:2] == "0x" {
-			temp.From = v.From[2:] // 去掉0x
-		} else {
-			temp.From = v.From
-		}
-		if v.To[0:2] == "0x" {
-			temp.To = v.To[2:] // 去掉0x
-		} else {
-			temp.To = v.To
-		}
+
+		temp.From = v.From
+		temp.To = v.To
+
 		temp.Amount, err = strconv.ParseFloat(v.Value, 64)
-		temp.Amount /= 1000000000000000000 //	监听单位是wei，转为ether
+		temp.Amount /= 1000000000000000000
 		if err != nil {
 			return nil, err
+		}
+		if temp.Amount == 0 {
+			continue
 		}
 
 		var numtime int64
@@ -177,15 +175,11 @@ func (eth *ETHBrowser) GetTrxs(account string, startpos, endpos int64) ([]chainl
 		}
 		temp.Time = time.Unix(numtime, 0)
 
-		if v.Hash[0:2] == "0x" {
-			temp.TransactionID = v.Hash[2:] // 去掉0x
-		} else {
-			temp.TransactionID = v.Hash
-		}
+		temp.TransactionID = v.Hash
 		temp.IsIrrevisible = false
 
 		numconfirm, _ := strconv.ParseInt(v.Confirmations, 10, 64)
-		if numconfirm > 6 {
+		if numconfirm >= ETHIrreversibleCnt {
 			temp.IsIrrevisible = true
 		}
 
@@ -200,8 +194,6 @@ func (eth *ETHBrowser) GetBlock(num int64) (*chainlib.Block, error) {
 	if err != nil {
 		return nil, err
 	}
-
-	//https://api.etherscan.io/api?module=block&action=getblockreward&blockno=2165403&apikey=YourApiKeyToken
 
 	q := req.URL.Query()
 	q.Add("module", "block")
@@ -253,7 +245,7 @@ func (eth *ETHBrowser) GetBlock(num int64) (*chainlib.Block, error) {
 
 	result.Irreversible = false
 	sub := latest - result.BlockNum
-	if sub > ETHIrreversibleCnt {
+	if sub >= ETHIrreversibleCnt {
 		result.Irreversible = true
 	}
 
@@ -267,7 +259,7 @@ func (eth *ETHBrowser) Irreversible(blocknum int64) (bool, error) {
 	}
 
 	sub := latest - blocknum
-	if sub > ETHIrreversibleCnt {
+	if sub >= ETHIrreversibleCnt {
 		return true, nil
 	}
 
@@ -342,14 +334,10 @@ func (eth *ETHBrowser) Tick() {
 				log.Printf("ETH trx irreversible from: %v  %v\n", trx.TransactionID, eth.handleHeight)
 			}
 
-			var result error
-			if trx.To == eth.tickAddress {
-				result = chainlib.PushCharge(trx)
-			} else if trx.From == eth.tickAddress {
-				result = chainlib.PushExtract(trx)
+			if strings.EqualFold(trx.To, eth.tickAddress) {
+				chainlib.PushCharge(trx)
 			}
 
-			log.Printf("[Tick] ETH push action result:%v\n", result)
 		} else {
 			jobid := trx.Category + "_" + trx.TransactionID
 			if job, _ := delayqueue.Get(jobid); job != nil {
@@ -374,10 +362,8 @@ func (eth *ETHBrowser) ReTry(trx chainlib.Transaction) bool {
 		return false
 	}
 
-	if trx.To == eth.tickAddress {
+	if strings.EqualFold(trx.To, eth.tickAddress) {
 		chainlib.PushCharge(trx)
-	} else if trx.From == eth.tickAddress {
-		chainlib.PushExtract(trx)
 	} else {
 		return false
 	}

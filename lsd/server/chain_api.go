@@ -9,8 +9,6 @@ import (
 	"io/ioutil"
 	"log"
 	"net/http"
-	"strconv"
-	"strings"
 	"time"
 )
 
@@ -173,97 +171,6 @@ func IsCurrentProducer() bool {
 	}
 
 	return false
-}
-
-//GetExtractActions get transaction by escrow account(*dbtc,deth,deos) when extracting
-func GetExtractActions(addr string, pos, offset int32) ([]chainlib.Transaction, error) {
-	// reqpara := ActionsParams{
-	// 	AccountName: addr,
-	// 	Pos:         pos,
-	// 	Offset:      offset,
-	// }
-	// req, err := json.Marshal(reqpara)
-	// if err != nil {
-	// 	return nil, err
-	// }
-
-	// para := bytes.NewBuffer([]byte(req))
-	// request, err := http.NewRequest("POST", "http://127.0.0.1:8888/v1/history/get_actions", para)
-	// if err != nil {
-	// 	return nil, err
-	// }
-	// request.Header.Set("Content-type", "application/json")
-
-	// client := &http.Client{}
-	// response, errr := client.Do(request)
-	// if errr != nil {
-	// 	return nil, err
-	// }
-	// if response.StatusCode != 200 {
-	// 	return nil, fmt.Errorf("ChainAPI Response error: %v\n", response.Status)
-	// }
-
-	// body, err := ioutil.ReadAll(response.Body)
-	// if err != nil {
-	// 	return nil, err
-	// }
-
-	cmdStr := fmt.Sprintf("cldatx get actions %s -j %d %d", addr, pos, offset)
-
-	log.Printf("\n****************************************\n%s\n****************************************\n", cmdStr)
-	res, err := chainlib.ExecShell(cmdStr)
-	if err != nil {
-		log.Printf("\nGetAccountActions get actions return: %s\n", err)
-		return nil, err
-	}
-
-	var resp ExtractActions
-	if err := json.Unmarshal([]byte(res), &resp); err != nil {
-		return nil, err
-	}
-
-	lastIrreversibleBlock := int64(resp.LastIrreversibleBlock)
-	result := make([]chainlib.Transaction, 0)
-	for _, v := range resp.Actions {
-		log.Printf("trx: %v\n", v)
-		if v.ActionTrace.Act.Name != "extract" {
-			continue
-		}
-
-		if v.ActionTrace.Act.Data.To != addr {
-			continue
-		}
-
-		var temp chainlib.Transaction
-		temp.TransactionID = v.ActionTrace.TrxID
-
-		temp.BlockNum = int64(v.BlockNum)
-		temp.From = v.ActionTrace.Act.Data.From
-		temp.To = v.ActionTrace.Act.Data.To
-		amountpos := strings.Index(v.ActionTrace.Act.Data.Quantity, " ") // EOS的Quantity是金额+空格+币种
-		amountstr := v.ActionTrace.Act.Data.Quantity[:amountpos]         // 只需要空格前面的金额
-		temp.Category = v.ActionTrace.Act.Data.Quantity[amountpos+1:]
-		temp.Amount, err = strconv.ParseFloat(amountstr, 64)
-		temp.Memo = v.ActionTrace.Act.Data.Memo
-		if err != nil {
-			log.Printf("Extract parse amount err:%v\n", err)
-			return nil, err
-		}
-
-		temp.Time, err = time.Parse("2006-01-02T15:04:05", v.BlockTime)
-		if err != nil {
-			log.Printf("Extract parse time err:%v\n", err)
-			return nil, err
-		}
-		temp.IsIrrevisible = false
-		if lastIrreversibleBlock >= temp.BlockNum {
-			temp.IsIrrevisible = true
-		}
-
-		result = append(result, temp)
-	}
-
-	return result, nil
 }
 
 func GetExtractTransaction(trxid string) (*chainlib.Transaction, error) {

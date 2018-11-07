@@ -1,6 +1,7 @@
 package server
 
 import (
+	"crypto/tls"
 	"datx/lsd/chainlib"
 	"datx/lsd/common"
 	"fmt"
@@ -11,9 +12,12 @@ import (
 
 //btc multisig
 func BTCMultiSig(trx chainlib.Transaction) (string, error) {
-	url := fmt.Sprintf("https://localhost:8080/btc/withdraw?isTestnet=1&to=%s&value=%s&fee=100000&trxid=%s&nodeName=%s", trx.To, fmt.Sprintf("%f", trx.Amount), trx.TransactionID, common.GetCfgProducerName())
-
-	resp, err := http.Get(url)
+	url := fmt.Sprintf("%s/btc/withdraw?isTestnet=1&to=%s&value=%s&fee=2000&trxid=%s&nodeName=%s", common.GetCrossChainEnds(), trx.Memo, fmt.Sprintf("%.4f", trx.Amount), trx.TransactionID, common.GetCfgProducerName())
+	tr := &http.Transport{
+		TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
+	}
+	client := &http.Client{Transport: tr}
+	resp, err := client.Get(url)
 	if err != nil {
 		return "", err
 	}
@@ -35,9 +39,12 @@ func BTCMultiSig(trx chainlib.Transaction) (string, error) {
 
 //eth multisig
 func ETHMultiSig(trx chainlib.Transaction) (string, error) {
-	url := fmt.Sprintf("https://localhost:8080/eth/withdraw?to=%s&value=%s&data=%s&trxid=%s&nodeName=%s", trx.To, fmt.Sprintf("%f", trx.Amount), trx.Memo, trx.TransactionID, common.GetCfgProducerName())
-
-	resp, err := http.Get(url)
+	url := fmt.Sprintf("%s/eth/withdraw?to=%s&value=%s&data=%s&trxid=%s&nodeName=%s", common.GetCrossChainEnds(), trx.To, fmt.Sprintf("%.4f", trx.Amount), trx.Memo, trx.TransactionID, common.GetCfgProducerName())
+	tr := &http.Transport{
+		TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
+	}
+	client := &http.Client{Transport: tr}
+	resp, err := client.Get(url)
 	if err != nil {
 		return "", err
 	}
@@ -59,9 +66,12 @@ func ETHMultiSig(trx chainlib.Transaction) (string, error) {
 
 //eos multisig
 func EOSMultiSig(trx chainlib.Transaction) (string, error) {
-	url := fmt.Sprintf("https://localhost:8080/eos/withdraw?to=%s&value=%s&trxid=%s&nodeName=%s", trx.To, fmt.Sprintf("%f EOS", trx.Amount), trx.TransactionID, common.GetCfgProducerName())
-
-	resp, err := http.Get(url)
+	url := fmt.Sprintf("%s/eos/withdraw?to=%s&value=%s&trxid=%s&nodeName=%s", common.GetCrossChainEnds(), trx.To, fmt.Sprintf("%.4f", trx.Amount), trx.TransactionID, common.GetCfgProducerName())
+	tr := &http.Transport{
+		TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
+	}
+	client := &http.Client{Transport: tr}
+	resp, err := client.Get(url)
 	if err != nil {
 		return "", err
 	}

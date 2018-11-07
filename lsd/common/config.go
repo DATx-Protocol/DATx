@@ -6,25 +6,29 @@ import (
 	"os"
 	"runtime"
 	"strings"
+	"sync"
 
 	"github.com/go-ini/ini"
 )
 
+var cfg *ini.File
+var once sync.Once
+
 //GetConfig ...
 func GetConfig() (*ini.File, error) {
-	var cfg *ini.File
 	var err error
-	if runtime.GOOS == "linux" {
-		// log.Println("Unix/Linux type OS detected")
-		cfg, err = ini.Load(os.Getenv("HOME") + "/.local/share/datxos/noddatx/config/config.ini")
-	} else if runtime.GOOS == "darwin" {
-		// log.Println("Mac OS detected")
-		cfg, err = ini.Load(os.Getenv("HOME") + "/Library/Application Support/datxos/noddatx/config/config.ini")
-	} else {
-		return nil, fmt.Errorf("%s detected,not support", runtime.GOOS)
-	}
+	once.Do(func() {
+		if runtime.GOOS == "linux" {
+			cfg, err = ini.Load(os.Getenv("HOME") + "/.local/share/datxos/noddatx/config/config.ini")
+		} else if runtime.GOOS == "darwin" {
+			cfg, err = ini.Load(os.Getenv("HOME") + "/Library/Application Support/datxos/noddatx/config/config.ini")
+		} else {
+			cfg = nil
+			err = fmt.Errorf("%s detected,not support", runtime.GOOS)
+		}
+	})
 
-	if err != nil {
+	if cfg == nil {
 		return nil, err
 	}
 
@@ -67,6 +71,18 @@ func GetTrusteeAccount(name string) string {
 	}
 
 	result = cfg.Section("").Key(name).String()
+	return result
+}
+
+func GetCrossChainEnds() string {
+	var result string
+	cfg, err := GetConfig()
+	if err != nil {
+		log.Printf("GetETHTrusteeAccount Get config err:%v\n", err)
+		return result
+	}
+
+	result = cfg.Section("").Key("across-chain-endpoint").String()
 	return result
 }
 

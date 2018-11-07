@@ -62,7 +62,7 @@ func (tick *ChainServer) AddBrowser(cate string, browser chainlib.CommonFunc) {
 }
 
 func (tick *ChainServer) queryLoop() {
-	ticker := time.NewTicker(500 * time.Millisecond)
+	ticker := time.NewTicker(time.Second)
 
 	for {
 		select {
@@ -100,7 +100,7 @@ func (tick *ChainServer) queryLoop() {
 }
 
 func (tick *ChainServer) taskLoop() {
-	ticker := time.NewTicker(100 * time.Millisecond)
+	ticker := time.NewTicker(500 * time.Millisecond)
 	topics := []string{"BTC", "ETH", "EOS"}
 
 	for {
@@ -177,7 +177,6 @@ func (tick *ChainServer) AddTask(trx chainlib.Transaction, delay int64) {
 func (tick *ChainServer) pushChargeExpiredTrxs() error {
 	//get expired trx from extract smart contract table
 	log.Print("[ChainServer] Get expiration transaction and push action again.\n")
-	// raw, err := GetOuterTrxTable("datxos.charg", "datxos.charg", "expiration")
 	extraStr := fmt.Sprint("cldatx get table datxos.charg datxos.charg expiration")
 	raw, err := chainlib.ExecShell(extraStr)
 	if err != nil {
@@ -193,6 +192,9 @@ func (tick *ChainServer) pushChargeExpiredTrxs() error {
 	}
 
 	for _, v := range temp.Rows {
+		if v.Count >= 3 {
+			continue
+		}
 		var item chainlib.Transaction
 		item.TransactionID = v.Trxid
 		item.Category = v.Category
@@ -203,11 +205,7 @@ func (tick *ChainServer) pushChargeExpiredTrxs() error {
 		item.IsIrrevisible = true
 		item.Memo = v.Memo
 
-		if item.To != "" {
-			chainlib.PushCharge(item)
-		} else {
-			chainlib.PushExtract(item)
-		}
+		chainlib.PushCharge(item)
 	}
 
 	return nil
@@ -215,17 +213,17 @@ func (tick *ChainServer) pushChargeExpiredTrxs() error {
 
 func (tick *ChainServer) updateexpiretable() error {
 	log.Print("[ChainServer] update expiration table.\n")
-	extraStr := fmt.Sprintf("cldatx push action datxos.extra updateexpire '' -p %s", common.GetCfgProducerName())
+	extraStr := fmt.Sprintf("cldatx push action datxos.extra updateexpire '' -p %s -f", common.GetCfgProducerName())
 	_, err := chainlib.ExecShell(extraStr)
 	if err != nil {
-		log.Printf("[ChainServer] update expiration table failed: %v\n", err)
+		log.Printf("[ChainServer] update datxos.extra expiration table failed: %v\n", err)
 		return err
 	}
 
-	chargStr := fmt.Sprintf("cldatx push action datxos.charg updateexptrx '' -p %s", common.GetCfgProducerName())
+	chargStr := fmt.Sprintf("cldatx push action datxos.charg updateexptrx '' -p %s -f", common.GetCfgProducerName())
 	_, err = chainlib.ExecShell(chargStr)
 	if err != nil {
-		log.Printf("[ChainServer] update expiration table failed: %v\n", err)
+		log.Printf("[ChainServer] update datxos.charg expiration table failed: %v\n", err)
 		return err
 	}
 

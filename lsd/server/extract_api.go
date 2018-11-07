@@ -6,6 +6,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"strconv"
+	"strings"
 	"time"
 )
 
@@ -36,21 +38,30 @@ type ExpiredArgs struct {
 
 //Extract
 type Extract struct {
-	pos int32
+	btcpos int32
+
+	ethpos int32
+
+	eospos int32
 
 	offset int32
 
 	taskClose chan bool
 
 	producerName string
+
+	lastIrreversibleBlockNum int64
 }
 
 func NewExtract(name string) *Extract {
 	return &Extract{
-		pos:          0,
-		offset:       10,
-		taskClose:    make(chan bool),
-		producerName: name,
+		btcpos:                   0,
+		ethpos:                   0,
+		eospos:                   0,
+		offset:                   9,
+		taskClose:                make(chan bool),
+		producerName:             name,
+		lastIrreversibleBlockNum: 0,
 	}
 }
 
@@ -79,6 +90,7 @@ func (ext *Extract) getExpiredTrxs() ([]chainlib.Transaction, error) {
 		var item chainlib.Transaction
 		item.TransactionID = v.Trxid
 		item.Category = v.Category
+		item.IsIrrevisible = true
 
 		result = append(result, item)
 	}
@@ -86,30 +98,89 @@ func (ext *Extract) getExpiredTrxs() ([]chainlib.Transaction, error) {
 	return result, nil
 }
 
+//GetExtractActions get transaction by escrow account(*dbtc,deth,deos) when extracting
+func (ext *Extract) getExtractActions(addr string, pos, offset int32) ([]chainlib.Transaction, int32, error) {
+	cmdStr := fmt.Sprintf("cldatx get actions %s -j %d %d", addr, pos, offset)
+	res, err := chainlib.ExecShell(cmdStr)
+	if err != nil {
+		log.Printf("\nGetAccountActions get actions return: %s\n", err)
+		return nil, 0, err
+	}
+
+	var resp ExtractActions
+	if err := json.Unmarshal([]byte(res), &resp); err != nil {
+		return nil, 0, err
+	}
+
+	lastIrreversibleBlock := int64(resp.LastIrreversibleBlock)
+	result := make([]chainlib.Transaction, 0)
+	for _, v := range resp.Actions {
+		if v.ActionTrace.Act.Name != "extract" {
+			continue
+		}
+
+		if v.ActionTrace.Act.Data.To != addr {
+			continue
+		}
+
+		var temp chainlib.Transaction
+		temp.TransactionID = v.ActionTrace.TrxID
+
+		temp.BlockNum = int64(v.BlockNum)
+		temp.From = v.ActionTrace.Act.Data.From
+		temp.To = v.ActionTrace.Act.Data.To
+		amountpos := strings.Index(v.ActionTrace.Act.Data.Quantity, " ")
+		amountstr := v.ActionTrace.Act.Data.Quantity[:amountpos]
+		temp.Category = v.ActionTrace.Act.Data.Quantity[amountpos+1:]
+		temp.Amount, err = strconv.ParseFloat(amountstr, 64)
+		temp.Memo = v.ActionTrace.Act.Data.Memo
+		if err != nil {
+			log.Printf("Extract parse amount err:%v\n", err)
+			return nil, 0, err
+		}
+
+		temp.Time, err = time.Parse("2006-01-02T15:04:05", v.BlockTime)
+		if err != nil {
+			log.Printf("Extract parse time err:%v\n", err)
+			return nil, 0, err
+		}
+		temp.IsIrrevisible = false
+		if lastIrreversibleBlock >= temp.BlockNum {
+			temp.IsIrrevisible = true
+		}
+
+		result = append(result, temp)
+	}
+
+	return result, int32(len(resp.Actions)), nil
+}
+
 func (ext *Extract) getAllTransactions() ([]chainlib.Transaction, error) {
 	var result []chainlib.Transaction
 
 	//dbtc
-	btcTrxs, err := GetExtractActions("datxos.dbtc", ext.pos, ext.offset)
+	btcTrxs, btcplus, err := ext.getExtractActions("datxos.dbtc", ext.btcpos, ext.offset)
 	if err != nil {
 		return nil, err
 	}
 	result = append(result, btcTrxs...)
+	ext.btcpos = ext.btcpos + btcplus
 
 	//deth
-	ethTrxs, err := GetExtractActions("datxos.deth", ext.pos, ext.offset)
+	ethTrxs, ethplus, err := ext.getExtractActions("datxos.deth", ext.ethpos, ext.offset)
 	if err != nil {
 		return nil, err
 	}
 	result = append(result, ethTrxs...)
+	ext.ethpos = ext.ethpos + ethplus
 
 	//deos
-	eosTrxs, err := GetExtractActions("datxos.deos", ext.pos, ext.offset)
+	eosTrxs, eosplus, err := ext.getExtractActions("datxos.deos", ext.eospos, ext.offset)
 	if err != nil {
 		return nil, err
 	}
 	result = append(result, eosTrxs...)
-	ext.pos = ext.pos + ext.offset
+	ext.eospos = ext.eospos + eosplus
 
 	expire, err := ext.getExpiredTrxs()
 	if err == nil {
@@ -191,7 +262,7 @@ func (ext *Extract) pushExtractAction(trx chainlib.Transaction) error {
 }
 
 func (ext *Extract) taskLoop() {
-	ticker := time.NewTicker(100 * time.Millisecond)
+	ticker := time.NewTicker(500 * time.Millisecond)
 	topics := []string{"DBTC", "DETH", "DEOS"}
 
 	for {
@@ -212,7 +283,7 @@ func (ext *Extract) taskLoop() {
 
 				irreversible := CheckIrreversible(trx)
 				if irreversible {
-					go ext.pushExtractAction(trx)
+					ext.pushExtractAction(trx)
 				}
 			}
 		}
@@ -229,7 +300,7 @@ func (ext *Extract) ExecExtract() {
 
 	for _, v := range trxlist {
 		if v.IsIrrevisible {
-			go ext.pushExtractAction(v)
+			ext.pushExtractAction(v)
 		} else {
 			ext.pushTrxToQueue(v)
 		}
