@@ -348,6 +348,6 @@ for (flag, command, function, inAll, help) in commands:
             haveCommand = True
             function()
 if not haveCommand:
-    print('bios-boot-tutorial.py: Tell me what to do. -a does almost everything. -h shows options.')
+    print('Tell me what to do. -a does almost everything. -h shows options.')
 
 
