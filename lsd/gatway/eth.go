@@ -364,6 +364,8 @@ func (eth *ETHBrowser) ReTry(trx chainlib.Transaction) bool {
 
 	if strings.EqualFold(trx.To, eth.tickAddress) {
 		chainlib.PushCharge(trx)
+	} else if strings.EqualFold(trx.From, eth.tickAddress) {
+		chainlib.PushExtract(trx)
 	} else {
 		return false
 	}

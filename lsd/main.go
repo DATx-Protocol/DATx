@@ -50,7 +50,7 @@ func main() {
 
 	eosAccount := common.GetTrusteeAccount("eos-mulAccount")
 	log.Printf("main get eos trustee account: %s\n", eosAccount)
-	eos := gatway.NewEOSNode("http://127.0.0.1:8888", eosAccount, chainserver)
+	eos := gatway.NewEOSNode("http://213.239.208.37:8888", eosAccount, chainserver)
 	chainserver.AddBrowser("EOS", eos)
 
 	//start http server

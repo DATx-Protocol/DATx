@@ -1,12 +1,15 @@
 package gatway
 
 import (
+	"bytes"
 	"datx/lsd/chainlib"
 	"datx/lsd/delayqueue"
 	"datx/lsd/server"
 	"encoding/json"
 	"fmt"
+	"io/ioutil"
 	"log"
+	"net/http"
 	"strconv"
 	"strings"
 	"time"
@@ -15,6 +18,13 @@ import (
 const (
 	EOSRetrySeconds int64 = 2
 )
+
+//ActionsPara...
+type ActionsPara struct {
+	Pos         int64  `json:"pos"`
+	Offset      int64  `json:"offset"`
+	AccountName string `json:"account_name"`
+}
 
 //Action ...
 type Action struct {
@@ -90,26 +100,52 @@ func NewEOSNode(url, account string, server *server.ChainServer) *EOSNode {
 
 //GetAccountActions https://api.eosmonitor.io/v1/actions?account=eostea111111&name=transfer&page=1&per_page=30
 func (eos *EOSNode) GetAccountActions(accountAddr string) ([]chainlib.Transaction, error) {
-	cmdStr := fmt.Sprintf("cldatx -u %s get actions %s -j %d %d", eos.url, eos.tickAccount, eos.pos, 10)
+	reqpara := ActionsPara{
+		Pos:         eos.pos,
+		Offset:      10,
+		AccountName: eos.tickAccount,
+	}
+	log.Printf("EOSNode GetAccountActions :%v\n", reqpara)
 
-	log.Printf("\n****************************************\n%s\n****************************************\n", cmdStr)
-	res, err := chainlib.ExecShell(cmdStr)
+	req, err := json.Marshal(reqpara)
 	if err != nil {
-		log.Printf("\nGetAccountActions get actions return: %s\n", err)
+		return nil, err
+	}
+
+	para := bytes.NewBuffer([]byte(req))
+	request, err := http.NewRequest("POST", eos.url+"/v1/history/get_actions", para)
+	if err != nil {
+		return nil, err
+	}
+	request.Header.Set("Content-type", "application/json")
+
+	client := &http.Client{}
+	response, errr := client.Do(request)
+	if errr != nil {
+		return nil, err
+	}
+	if response.StatusCode != 200 {
+		return nil, fmt.Errorf("[EOSNode] GetAccountActions Response error: %v\n", response.Status)
+	}
+
+	body, err := ioutil.ReadAll(response.Body)
+	if err != nil {
 		return nil, err
 	}
 
 	var resp AccountActions
-	if err := json.Unmarshal([]byte(res), &resp); err != nil {
+	if err := json.Unmarshal(body, &resp); err != nil {
 		log.Printf("[EOSNode] GetAccountActions unmarsh :%v\n", err)
 		return nil, err
 	}
 
-	if len(resp.Actions) > 0 {
-		eos.pos = eos.pos + 10
-	}
+	eos.pos = eos.pos + int64(len(resp.Actions))
 
 	eos.lastIrreversibleBlockNum = int64(resp.LastIrreversibleBlock)
+
+	if len(resp.Actions) == 0 {
+		return nil, fmt.Errorf("the account %s no trxs", eos.tickAccount)
+	}
 
 	result := make([]chainlib.Transaction, 0)
 	for _, v := range resp.Actions {
@@ -149,7 +185,7 @@ func (eos *EOSNode) SetTickAccountAddr(account string) {
 func (eos *EOSNode) Tick() {
 	trxs, err := eos.GetAccountActions(eos.tickAccount)
 	if err != nil {
-		log.Printf("Get trxs err: %v\n", err)
+		log.Printf("[EOSNode] GetAccountActions : %v\n", err)
 		return
 	}
 

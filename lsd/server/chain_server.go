@@ -86,7 +86,7 @@ func (tick *ChainServer) queryLoop() {
 
 				//update contract table for expireation trx
 				tick.count++
-				if tick.count >= 10 {
+				if tick.count >= 15 {
 					tick.count = 1
 					tick.updateexpiretable()
 				}
@@ -217,6 +217,13 @@ func (tick *ChainServer) updateexpiretable() error {
 	_, err := chainlib.ExecShell(extraStr)
 	if err != nil {
 		log.Printf("[ChainServer] update datxos.extra expiration table failed: %v\n", err)
+		return err
+	}
+
+	rollbackStr := fmt.Sprintf("cldatx push action datxos.extra rollbacktrx '' -p %s -f", common.GetCfgProducerName())
+	_, err = chainlib.ExecShell(rollbackStr)
+	if err != nil {
+		log.Printf("[ChainServer] update datxos.extra rollbacktrx failed: %v\n", err)
 		return err
 	}
 
