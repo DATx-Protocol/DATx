@@ -209,7 +209,7 @@ func (eos *EOSNode) Tick() {
 			}
 
 			log.Printf("add eos task: %v  %v\n", trx.TransactionID, time.Now().Unix())
-			eos.tick.AddTask(trx, EOSDelaySeconds)
+			eos.tick.AddTask(trx, EOSRetrySeconds)
 		}
 	}
 }
@@ -217,7 +217,7 @@ func (eos *EOSNode) Tick() {
 //ReTry ...
 func (eos *EOSNode) ReTry(trx chainlib.Transaction) bool {
 	if eos.lastIrreversibleBlockNum < trx.BlockNum {
-		eos.tick.AddTask(trx, EOSDelaySeconds)
+		eos.tick.AddTask(trx, EOSRetrySeconds)
 		return false
 	}
 
