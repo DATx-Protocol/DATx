@@ -70,19 +70,23 @@ func EOSMultiSig(trx chainlib.Transaction) (string, error) {
 	tr := &http.Transport{
 		TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
 	}
+
 	client := &http.Client{Transport: tr}
 	resp, err := client.Get(url)
 	if err != nil {
+		log.Printf("EOSMultiSig request get http: %v\n", err)
 		return "", err
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != 200 {
-		return "", fmt.Errorf("EOSMultiSig Response error: %v\n", resp.Status)
+		log.Printf("EOSMultiSig status code: %v\n", resp.Status)
+		return "", fmt.Errorf("EOSMultiSig Response error: %v", resp.Status)
 	}
 
 	body, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
+		log.Printf("EOSMultiSig ReadAll :%v\n", err)
 		return "", err
 	}
 

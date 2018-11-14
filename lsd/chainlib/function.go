@@ -234,7 +234,7 @@ func PushCharge(trx Transaction) error {
 
 	_, err := ClPushCharge("datxos.charg", "charge", charge)
 	if err != nil {
-		log.Printf("\nPushCharge failed: %v %v\n:", trx.TransactionID, err)
+		log.Printf("[PushCharge] failed: %v\n %v\n:", trx, err)
 		return err
 	}
 
@@ -254,7 +254,7 @@ func PushExtract(trx Transaction) error {
 	}
 	_, err = ClPushAction("datxos.extra", "setsuccess", string(bytes), extract.Producer)
 	if err != nil {
-		log.Printf("PushExtract failed:%v %v\n", trx.TransactionID, err)
+		log.Printf("[PushExtract] failed:  %v\n %v\n", trx, err)
 		return err
 	}
 

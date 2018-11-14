@@ -105,7 +105,6 @@ func (eos *EOSNode) GetAccountActions(accountAddr string) ([]chainlib.Transactio
 		Offset:      10,
 		AccountName: eos.tickAccount,
 	}
-	log.Printf("EOSNode GetAccountActions :%v\n", reqpara)
 
 	req, err := json.Marshal(reqpara)
 	if err != nil {
@@ -115,6 +114,7 @@ func (eos *EOSNode) GetAccountActions(accountAddr string) ([]chainlib.Transactio
 	para := bytes.NewBuffer([]byte(req))
 	request, err := http.NewRequest("POST", eos.url+"/v1/history/get_actions", para)
 	if err != nil {
+		log.Printf("[EOSNode] GetAccountActions new http request: %v\n", err)
 		return nil, err
 	}
 	request.Header.Set("Content-type", "application/json")
@@ -122,14 +122,17 @@ func (eos *EOSNode) GetAccountActions(accountAddr string) ([]chainlib.Transactio
 	client := &http.Client{}
 	response, errr := client.Do(request)
 	if errr != nil {
-		return nil, err
+		log.Printf("[EOSNode] GetAccountActions do http request: %v\n", errr)
+		return nil, errr
 	}
 	if response.StatusCode != 200 {
-		return nil, fmt.Errorf("[EOSNode] GetAccountActions Response error: %v\n", response.Status)
+		log.Printf("[EOSNode] GetAccountActions http reponse: %v\n", response.Body)
+		return nil, fmt.Errorf("[EOSNode] GetAccountActions Response error: %v", response.Status)
 	}
 
 	body, err := ioutil.ReadAll(response.Body)
 	if err != nil {
+		log.Printf("[EOSNode] GetAccountActions read body :%v\n", err)
 		return nil, err
 	}
 
@@ -150,6 +153,11 @@ func (eos *EOSNode) GetAccountActions(accountAddr string) ([]chainlib.Transactio
 	result := make([]chainlib.Transaction, 0)
 	for _, v := range resp.Actions {
 		if v.ActionTrace.Act.Name != "transfer" {
+			continue
+		}
+
+		if strings.Contains(v.ActionTrace.Act.Data.From, "eosio.") || strings.Contains(v.ActionTrace.Act.Data.To, "eosio.") {
+			log.Printf("[EOSNode] GetAccountActions: from=%v to=%v\n", v.ActionTrace.Act.Data.From, v.ActionTrace.Act.Data.To)
 			continue
 		}
 

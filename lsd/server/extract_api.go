@@ -112,7 +112,7 @@ func (ext *Extract) getExtractActions(addr string, pos, offset int32) ([]chainli
 		return nil, 0, err
 	}
 
-	lastIrreversibleBlock := int64(resp.LastIrreversibleBlock)
+	ext.lastIrreversibleBlockNum = int64(resp.LastIrreversibleBlock)
 	result := make([]chainlib.Transaction, 0)
 	for _, v := range resp.Actions {
 		if v.ActionTrace.Act.Name != "extract" {
@@ -145,7 +145,7 @@ func (ext *Extract) getExtractActions(addr string, pos, offset int32) ([]chainli
 			return nil, 0, err
 		}
 		temp.IsIrrevisible = false
-		if lastIrreversibleBlock >= temp.BlockNum {
+		if ext.lastIrreversibleBlockNum >= temp.BlockNum {
 			temp.IsIrrevisible = true
 		}
 
@@ -281,9 +281,10 @@ func (ext *Extract) taskLoop() {
 					break
 				}
 
-				irreversible := CheckIrreversible(trx)
-				if irreversible {
+				if ext.lastIrreversibleBlockNum >= trx.BlockNum {
 					ext.pushExtractAction(trx)
+				} else {
+					log.Printf("[Extract] trx timeout and not irreversible: %v < %v %v", ext.lastIrreversibleBlockNum, trx.BlockNum, time.Now())
 				}
 			}
 		}
