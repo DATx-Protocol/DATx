@@ -1,0 +1,70 @@
+#!/usr/bin/env node
+
+var program = require('commander');
+var bitcoinapi = require('../lib/bitcoinapi.js');
+
+
+program
+.command('genKeyPair')
+.description('generate bitcoin key pairs')
+.option('-t,--testnet','is testnet')
+.action(function(cmd){
+    try{
+        var result = bitcoinapi.genKeyPairs({IsTestnet:cmd.testnet?1:0});
+        console.log(result);
+    }
+    catch(e){
+        console.log(e.toString());
+    }
+})
+
+program
+.command('getKeysFromWIF <wif>')
+.description('get keys from wif')
+.option('-t,--testnet','is testnet')
+.action(function(wif,cmd){
+    try{
+        var result = bitcoinapi.getKeysFromWIF(wif,{IsTestnet:cmd.testnet?1:0});
+        console.log(result);
+    }
+    catch(e){
+        console.log(e.toString());
+    }
+})
+
+
+program
+.command('genP2PKHAddr <publicKey>')
+.description('generate P2PKH address')
+.option('-t,--testnet','is testnet')
+.action(function(publicKey,cmd){
+    try{
+        var result = bitcoinapi.genP2PKHAddr(publicKey,{IsTestnet:cmd.testnet?1:0});
+        console.log(result);
+    }
+    catch(e){
+        console.log(e.toString());
+    }
+})
+
+
+
+program
+.command('genMultiSigAddr <publicKeys> <num>')
+.description('generate MultiSig address')
+.option('-t,--testnet','is testnet')
+.action(function(publicKeys,num,cmd){
+    try{
+        publicKeys = JSON.parse(publicKeys);
+        num = parseInt(num);
+        var result = bitcoinapi.genMulSigAddr(publicKeys,num,{IsTestnet:cmd.testnet?1:0});
+        console.log(result);
+    }
+    catch(e){
+        console.log(e.toString());
+    }
+})
+
+
+
+program.parse(process.argv)

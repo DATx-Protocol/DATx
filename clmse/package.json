@@ -1,0 +1,15 @@
+{
+  "name": "clmse",
+  "version": "1.0.0",
+  "description": "tools",
+  "bin": "bin/clmse",
+  "engines": {
+    "node": ">=0.12.0"
+  },
+  "license": "MIT",
+  "readmeFilename": "README.md",
+  "dependencies": {
+    "bitcoinjs-lib": "4.0.1",
+    "commander": "2.19.0"
+  }
+}
