@@ -57,6 +57,8 @@ var ETHExtractHandler = func(w http.ResponseWriter, r *http.Request) {
 			return false, fmt.Sprintf("ETHExtractHandler unmarshal json data err: %v", err)
 		}
 
+		log.Printf("ETH HTTP get Trx: %v\n", trx)
+
 		jobid := trx.Category + "_" + trx.TransactionID
 		if job, _ := delayqueue.Get(jobid); job != nil {
 			return false, fmt.Sprintf("ETHExtractHandler trx is existed: %v", trx.TransactionID)
@@ -65,7 +67,7 @@ var ETHExtractHandler = func(w http.ResponseWriter, r *http.Request) {
 		var job delayqueue.Job
 		job.Topic = trx.Category
 		job.Id = trx.Category + "_" + trx.TransactionID
-		job.Delay = time.Now().Unix() + 60
+		job.Delay = time.Now().Unix()
 		job.TTR = 60
 
 		bytes, err := json.Marshal(trx)
@@ -83,7 +85,8 @@ var ETHExtractHandler = func(w http.ResponseWriter, r *http.Request) {
 
 	}()
 
-	log.Printf("Http Response: %v\n", str)
+	log.Printf("ETH Http Response: %v\n", str)
+
 	if isSuccess {
 		w.Write([]byte(str))
 	} else {

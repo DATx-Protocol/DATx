@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"runtime/debug"
 	"strconv"
 	"strings"
 	"time"
@@ -212,7 +213,16 @@ func (ext *Extract) pushTrxToQueue(trx chainlib.Transaction) {
 }
 
 //PushExtractAction push trx to contract that check the trx is sended already
-func (ext *Extract) pushExtractAction(trx chainlib.Transaction) error {
+func (ext *Extract) pushExtractAction(trx chainlib.Transaction) (err error) {
+
+	defer func() {
+		if errs := recover(); errs != nil {
+			log.Printf("[Extract] pushExtractAction panic,error: %v\n", errs)
+			debug.PrintStack()
+			err = fmt.Errorf("[Extract] pushExtractAction panic, %v", errs)
+		}
+	}()
+
 	//
 	args := ExtractArgs{
 		Trxid:    trx.TransactionID,
@@ -252,11 +262,11 @@ func (ext *Extract) pushExtractAction(trx chainlib.Transaction) error {
 
 	//multisig failed
 	if err != nil {
-		log.Printf("MultiSig failed trxID:%v %v\n", trxID, err)
-		// return err
+		log.Printf("MultiSig failed: %v %v\n", trxID, err)
+		return err
 	}
 
-	log.Printf("Extract finished: %v\n", trx)
+	log.Printf("[Extract] multisig success: %v\n", trx)
 
 	return nil
 }

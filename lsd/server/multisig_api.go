@@ -18,13 +18,15 @@ func BTCMultiSig(trx chainlib.Transaction) (string, error) {
 	}
 	client := &http.Client{Transport: tr}
 	resp, err := client.Get(url)
+
 	if err != nil {
 		return "", err
 	}
+	resp.Close = true
 	defer resp.Body.Close()
 
 	if resp.StatusCode != 200 {
-		return "", fmt.Errorf("BTCMultiSig Response error: %v\n", resp.Status)
+		return "", fmt.Errorf("BTCMultiSig Response error: %v", resp.Status)
 	}
 
 	body, err := ioutil.ReadAll(resp.Body)
@@ -45,13 +47,15 @@ func ETHMultiSig(trx chainlib.Transaction) (string, error) {
 	}
 	client := &http.Client{Transport: tr}
 	resp, err := client.Get(url)
+
 	if err != nil {
 		return "", err
 	}
+	resp.Close = true
 	defer resp.Body.Close()
 
 	if resp.StatusCode != 200 {
-		return "", fmt.Errorf("ETHMultiSig Response error: %v\n", resp.Status)
+		return "", fmt.Errorf("ETHMultiSig Response error: %v", resp.Status)
 	}
 
 	body, err := ioutil.ReadAll(resp.Body)
@@ -72,11 +76,13 @@ func EOSMultiSig(trx chainlib.Transaction) (string, error) {
 	}
 
 	client := &http.Client{Transport: tr}
+
 	resp, err := client.Get(url)
 	if err != nil {
 		log.Printf("EOSMultiSig request get http: %v\n", err)
 		return "", err
 	}
+	resp.Close = true
 	defer resp.Body.Close()
 
 	if resp.StatusCode != 200 {

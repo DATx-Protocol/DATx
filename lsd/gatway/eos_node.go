@@ -142,7 +142,7 @@ func (eos *EOSNode) GetAccountActions(accountAddr string) ([]chainlib.Transactio
 		return nil, err
 	}
 
-	eos.pos = eos.pos + int64(len(resp.Actions))
+	eos.pos = eos.pos + int64(len(resp.Actions)) + 1
 
 	eos.lastIrreversibleBlockNum = int64(resp.LastIrreversibleBlock)
 

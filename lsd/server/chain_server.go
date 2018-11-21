@@ -200,7 +200,8 @@ func (tick *ChainServer) pushChargeExpiredTrxs() error {
 		item.Category = v.Category
 		item.From = v.From
 		item.To = v.To
-		item.Amount, _ = strconv.ParseFloat(v.Quantity, 64)
+		Amount, _ := strconv.ParseFloat(v.Quantity, 64)
+		item.Amount = Amount / 10000
 		item.BlockNum = int64(v.Blocknum)
 		item.IsIrrevisible = true
 		item.Memo = v.Memo

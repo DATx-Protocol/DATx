@@ -82,6 +82,8 @@ type ETHBrowser struct {
 	tick *server.ChainServer
 
 	close chan bool
+
+	trxPool map[string]struct{}
 }
 
 func NewETHBrowser(accountAddr string, server *server.ChainServer) *ETHBrowser {
@@ -92,6 +94,7 @@ func NewETHBrowser(accountAddr string, server *server.ChainServer) *ETHBrowser {
 		handleHeight: 0,
 		tick:         server,
 		close:        make(chan bool),
+		trxPool:      make(map[string]struct{}),
 	}
 }
 
@@ -150,6 +153,15 @@ func (eth *ETHBrowser) GetTrxs(account string, startpos, endpos int64) ([]chainl
 		var temp chainlib.Transaction
 		var err error
 
+		if strings.Contains(v.IsError, "1") {
+			continue
+		}
+
+		if _, exist := eth.trxPool[v.Hash]; exist {
+			continue
+		}
+		temp.TransactionID = v.Hash
+
 		temp.Category = "ETH"
 		temp.BlockNum, err = strconv.ParseInt(v.BlockNumber, 10, 64)
 		if err != nil {
@@ -175,7 +187,6 @@ func (eth *ETHBrowser) GetTrxs(account string, startpos, endpos int64) ([]chainl
 		}
 		temp.Time = time.Unix(numtime, 0)
 
-		temp.TransactionID = v.Hash
 		temp.IsIrrevisible = false
 
 		numconfirm, _ := strconv.ParseInt(v.Confirmations, 10, 64)
@@ -335,7 +346,11 @@ func (eth *ETHBrowser) Tick() {
 			}
 
 			if strings.EqualFold(trx.To, eth.tickAddress) {
-				chainlib.PushCharge(trx)
+				err := chainlib.PushCharge(trx)
+				if err != nil {
+					log.Printf("[ETHBrowser] Tick PushCharge:  %v\n", err)
+				}
+				eth.trxPool[trx.TransactionID] = struct{}{}
 			}
 
 		} else {
@@ -358,13 +373,19 @@ func (eth *ETHBrowser) ReTry(trx chainlib.Transaction) bool {
 
 	sta, err := eth.Irreversible(blockNum)
 	if err != nil || !sta {
-		eth.tick.AddTask(trx, ETHDelaySeconds)
+		log.Printf("[ETHBrowser] ReTry and Add Delay Task: %v\n", trx)
+		eth.tick.AddTask(trx, ETHDelaySeconds/3)
 		return false
 	}
 
 	if strings.EqualFold(trx.To, eth.tickAddress) {
-		chainlib.PushCharge(trx)
+		err := chainlib.PushCharge(trx)
+		if err != nil {
+			log.Printf("[ETHBrowser] ReTry PushCharge:  %v\n", err)
+		}
+		eth.trxPool[trx.TransactionID] = struct{}{}
 	} else if strings.EqualFold(trx.From, eth.tickAddress) {
+		log.Printf("[ETHBrowser] ReTry: %v\n", trx)
 		chainlib.PushExtract(trx)
 	} else {
 		return false
