@@ -163,7 +163,7 @@ contract multiowned {
             pending.start = block.timestamp;
             m_pendingIndex[pending.index] = _operation;
         }
-        if(block.timestamp > pending.start + 1 minutes){
+        if(block.timestamp > pending.start + 30 minutes){
             return false;
         }
         // determine the bit to set for this owner.
@@ -265,6 +265,7 @@ contract wallet is multisig, multiowned {
         address to;
         uint value;
         bytes data;
+        uint flag;
     }
 
     // METHODS
@@ -295,10 +296,15 @@ contract wallet is multisig, multiowned {
 
         // determine our operation hash.
         _r = sha3(msg.data);
-        if (!confirm(_r) && m_txs[_r].to == 0) {
+        if(m_txs[_r].flag == 1){
+            return;
+        }
+
+        else if (!confirm(_r) && m_txs[_r].to == 0) {
             m_txs[_r].to = _to;
             m_txs[_r].value = _value;
             m_txs[_r].data = _data;
+            m_txs[_r].flag = 0;
             ConfirmationNeeded(_r, msg.sender, _value, _to, _data);
         }
     }
@@ -309,7 +315,7 @@ contract wallet is multisig, multiowned {
         if (m_txs[_h].to != 0) {
             m_txs[_h].to.transfer(m_txs[_h].value);
             MultiTransact(msg.sender, _h, m_txs[_h].value, m_txs[_h].to, m_txs[_h].data);
-            delete m_txs[_h];
+            m_txs[_h].flag = 1;
             return true;
         }
     }

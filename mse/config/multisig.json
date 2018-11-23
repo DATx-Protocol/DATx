@@ -178,7 +178,7 @@
   "deployedBytecode": "0x",
   "sourceMap": "",
   "deployedSourceMap": "",
-  "source": "//sol Wallet\n// Multi-sig.\n// @authors:\n// colin yu <https://www.datx.co/#home>\n// inheritable \"property\" contract that enables methods to be protected by requiring the acquiescence of either a\n// single, or, crucially, each of a number of, designated owners.\n// usage:\n// use modifiers onlyowner (just own owned) or onlymanyowners(hash), whereby the same hash must be provided by\n// some number (specified in constructor) of the set of owners (specified in the constructor, modifiable) before the\n// interior is executed.\ncontract multiowned {\n\n    // TYPES\n\n    // struct for the status of a pending operation.\n    struct PendingState {\n        uint yetNeeded;\n        uint ownersDone;\n        uint index;\n        uint start;\n    }\n\n    // EVENTS\n\n    // this contract only has five types of events: it can accept a confirmation, in which case\n    // we record owner and operation (hash) alongside it.\n    event Confirmation(address owner, bytes32 operation);\n    event Revoke(address owner, bytes32 operation);\n    // some others are in the case of an owner changing.\n    event OwnerChanged(address oldOwner, address newOwner);\n    event OwnerAdded(address newOwner);\n    event OwnerRemoved(address oldOwner);\n    // the last one is emitted if the required signatures change\n    event RequirementChanged(uint newRequirement);\n\n    // MODIFIERS\n\n    // simple single-sig function modifier.\n    modifier onlyowner {\n        if (isOwner(msg.sender))\n            _;\n    }\n    // multi-sig function modifier: the operation must have an intrinsic hash in order\n    // that later attempts can be realised as the same underlying operation and\n    // thus count as confirmations.\n    modifier onlymanyowners(bytes32 _operation) {\n        if (confirmAndCheck(_operation))\n            _;\n    }\n\n    // METHODS\n\n    // constructor is given number of sigs required to do protected \"onlymanyowners\" transactions\n    // as well as the selection of addresses capable of confirming them.\n    function multiowned(address[] _owners, uint _required) {\n        m_numOwners = _owners.length + 1;\n        m_owners[1] = uint(msg.sender);\n        m_ownerIndex[uint(msg.sender)] = 1;\n        for (uint i = 0; i < _owners.length; ++i)\n        {\n            m_owners[2 + i] = uint(_owners[i]);\n            m_ownerIndex[uint(_owners[i])] = 2 + i;\n        }\n        m_required = _required;\n    }\n    \n    // Revokes a prior confirmation of the given operation\n    function revoke(bytes32 _operation) external {\n        uint ownerIndex = m_ownerIndex[uint(msg.sender)];\n        // make sure they're an owner\n        if (ownerIndex == 0) return;\n        uint ownerIndexBit = 2**ownerIndex;\n        var pending = m_pending[_operation];\n        if (pending.ownersDone & ownerIndexBit > 0) {\n            pending.yetNeeded++;\n            pending.ownersDone -= ownerIndexBit;\n            Revoke(msg.sender, _operation);\n        }\n    }\n    \n    // Replaces an owner `_from` with another `_to`.\n    function changeOwner(address _from, address _to) onlymanyowners(sha3(msg.data)) external {\n        if (isOwner(_to)) return;\n        uint ownerIndex = m_ownerIndex[uint(_from)];\n        if (ownerIndex == 0) return;\n\n        clearPending();\n        m_owners[ownerIndex] = uint(_to);\n        m_ownerIndex[uint(_from)] = 0;\n        m_ownerIndex[uint(_to)] = ownerIndex;\n        OwnerChanged(_from, _to);\n    }\n    \n    function addOwner(address _owner) onlymanyowners(sha3(msg.data)) external {\n        if (isOwner(_owner)) return;\n\n        clearPending();\n        if (m_numOwners >= c_maxOwners)\n            reorganizeOwners();\n        if (m_numOwners >= c_maxOwners)\n            return;\n        m_numOwners++;\n        m_owners[m_numOwners] = uint(_owner);\n        m_ownerIndex[uint(_owner)] = m_numOwners;\n        OwnerAdded(_owner);\n    }\n    \n    function removeOwner(address _owner) onlymanyowners(sha3(msg.data)) external {\n        uint ownerIndex = m_ownerIndex[uint(_owner)];\n        if (ownerIndex == 0) return;\n        if (m_required > m_numOwners - 1) return;\n\n        m_owners[ownerIndex] = 0;\n        m_ownerIndex[uint(_owner)] = 0;\n        clearPending();\n        reorganizeOwners(); //make sure m_numOwner is equal to the number of owners and always points to the optimal free slot\n        OwnerRemoved(_owner);\n    }\n    \n    function changeRequirement(uint _newRequired) onlymanyowners(sha3(msg.data)) external {\n        if (_newRequired > m_numOwners) return;\n        m_required = _newRequired;\n        clearPending();\n        RequirementChanged(_newRequired);\n    }\n    \n    function isOwner(address _addr) returns (bool) {\n        return m_ownerIndex[uint(_addr)] > 0;\n    }\n    \n    function hasConfirmed(bytes32 _operation, address _owner) constant returns (bool) {\n        var pending = m_pending[_operation];\n        uint ownerIndex = m_ownerIndex[uint(_owner)];\n\n        // make sure they're an owner\n        if (ownerIndex == 0) return false;\n\n        // determine the bit to set for this owner.\n        uint ownerIndexBit = 2**ownerIndex;\n        if (pending.ownersDone & ownerIndexBit == 0) {\n            return false;\n        } else {\n            return true;\n        }\n    }\n    \n    // INTERNAL METHODS\n\n    function confirmAndCheck(bytes32 _operation) internal returns (bool) {\n        // determine what index the present sender is:\n        uint ownerIndex = m_ownerIndex[uint(msg.sender)];\n        // make sure they're an owner\n        if (ownerIndex == 0) return;\n\n        var pending = m_pending[_operation];\n        // if we're not yet working on this operation, switch over and reset the confirmation status.\n        if (pending.yetNeeded == 0) {\n            // reset count of confirmations needed.\n            pending.yetNeeded = m_required;\n            // reset which owners have confirmed (none) - set our bitmap to 0.\n            pending.ownersDone = 0;\n            pending.index = m_pendingIndex.length++;\n            pending.start = block.timestamp;\n            m_pendingIndex[pending.index] = _operation;\n        }\n        if(block.timestamp > pending.start + 1 minutes){\n            return false;\n        }\n        // determine the bit to set for this owner.\n        uint ownerIndexBit = 2**ownerIndex;\n        // make sure we (the message sender) haven't confirmed this operation previously.\n        if (pending.ownersDone & ownerIndexBit == 0) {\n            Confirmation(msg.sender, _operation);\n            // ok - check if count is enough to go ahead.\n            if (pending.yetNeeded <= 1) {\n                // enough confirmations: reset and run interior.\n                delete m_pendingIndex[m_pending[_operation].index];\n                delete m_pending[_operation];\n                return true;\n            }\n            else\n            {\n                // not enough: record that this owner in particular confirmed.\n                pending.yetNeeded--;\n                pending.ownersDone |= ownerIndexBit;\n            }\n        }\n    }\n\n    function reorganizeOwners() private returns (bool) {\n        uint free = 1;\n        while (free < m_numOwners)\n        {\n            while (free < m_numOwners && m_owners[free] != 0) free++;\n            while (m_numOwners > 1 && m_owners[m_numOwners] == 0) m_numOwners--;\n            if (free < m_numOwners && m_owners[m_numOwners] != 0 && m_owners[free] == 0)\n            {\n                m_owners[free] = m_owners[m_numOwners];\n                m_ownerIndex[m_owners[free]] = free;\n                m_owners[m_numOwners] = 0;\n            }\n        }\n    }\n    \n    function clearPending() internal {\n        uint length = m_pendingIndex.length;\n        for (uint i = 0; i < length; ++i)\n            if (m_pendingIndex[i] != 0)\n                delete m_pending[m_pendingIndex[i]];\n        delete m_pendingIndex;\n    }\n        \n    // FIELDS\n\n    // the number of owners that must confirm the same operation before it is run.\n    uint public m_required;\n    // pointer used to find a free slot in m_owners\n    uint public m_numOwners;\n    \n    // list of owners\n    uint[256] m_owners;\n    uint constant c_maxOwners = 250;\n    // index on the list of owners to allow reverse lookup\n    mapping(uint => uint) m_ownerIndex;\n    // the ongoing operations.\n    mapping(bytes32 => PendingState) m_pending;\n    bytes32[] m_pendingIndex;\n}\n\n\n// interface contract for multisig proxy contracts; see below for docs.\ncontract multisig {\n\n    // EVENTS\n\n    // logged events:\n    // Funds has arrived into the wallet (record how much).\n    event Deposit(address from, uint value);\n    // Single transaction going out of the wallet (record who signed for it, how much, and to whom it's going).\n    event SingleTransact(address owner, uint value, address to, bytes data);\n    // Multi-sig transaction going out of the wallet (record who signed for it last, the operation hash, how much, and to whom it's going).\n    event MultiTransact(address owner, bytes32 operation, uint value, address to, bytes data);\n    // Confirmation still needed for a transaction.\n    event ConfirmationNeeded(bytes32 operation, address initiator, uint value, address to, bytes data);\n    \n    // FUNCTIONS\n    \n    // TODO: document\n    function changeOwner(address _from, address _to) external;\n    function execute(address _to, uint _value, bytes _data) external returns (bytes32);\n    function confirm(bytes32 _h) returns (bool);\n}\n\n// usage:\n// bytes32 h = Wallet(w).from(oneOwner).transact(to, value, data);\n// Wallet(w).from(anotherOwner).confirm(h);\ncontract wallet is multisig, multiowned {\n\n    uint public version = 2;\n\n    // TYPES\n\n    // Transaction structure to remember details of transaction lest it need be saved for a later call.\n    struct Transaction {\n        address to;\n        uint value;\n        bytes data;\n    }\n\n    // METHODS\n\n    // constructor - just pass on the owner array to the multiowned and\n    // the limit to daylimit\n    function wallet(address[] _owners, uint _required)\n            multiowned(_owners, _required) {\n    }\n    \n    // kills the contract sending everything to `_to`.\n    function kill(address _to) onlymanyowners(sha3(msg.data)) external {\n        suicide(_to);\n    }\n    \n    // gets called when no other function matches\n    function() payable {\n        // just being sent some cash?\n        if (msg.value > 0)\n            Deposit(msg.sender, msg.value);\n    }\n    \n    // Outside-visible transact entry point. Executes transacion immediately if below daily spend limit.\n    // If not, goes into multisig process. We provide a hash on return to allow the sender to provide\n    // shortcuts for the other confirmations (allowing them to avoid replicating the _to, _value\n    // and _data arguments). They still get the option of using them if they want, anyways.\n    function execute(address _to, uint _value, bytes _data) external onlyowner returns (bytes32 _r) {\n\n        // determine our operation hash.\n        _r = sha3(msg.data);\n        if (!confirm(_r) && m_txs[_r].to == 0) {\n            m_txs[_r].to = _to;\n            m_txs[_r].value = _value;\n            m_txs[_r].data = _data;\n            ConfirmationNeeded(_r, msg.sender, _value, _to, _data);\n        }\n    }\n    \n    // confirm a transaction through just the hash. we use the previous transactions map, m_txs, in order\n    // to determine the body of the transaction from the hash provided.\n    function confirm(bytes32 _h) onlymanyowners(_h) returns (bool) {\n        if (m_txs[_h].to != 0) {\n            m_txs[_h].to.call.value(m_txs[_h].value)(m_txs[_h].data);\n            MultiTransact(msg.sender, _h, m_txs[_h].value, m_txs[_h].to, m_txs[_h].data);\n            delete m_txs[_h];\n            return true;\n        }\n    }\n    \n    // INTERNAL METHODS\n    \n    function clearPending() internal {\n        uint length = m_pendingIndex.length;\n        for (uint i = 0; i < length; ++i)\n            delete m_txs[m_pendingIndex[i]];\n        super.clearPending();\n    }\n\n    // FIELDS\n\n    // pending transactions we have at present.\n    mapping (bytes32 => Transaction) m_txs;\n}",
+  "source": "//sol Wallet\n// Multi-sig.\n// @authors:\n// colin yu <https://www.datx.co/#home>\n// inheritable \"property\" contract that enables methods to be protected by requiring the acquiescence of either a\n// single, or, crucially, each of a number of, designated owners.\n// usage:\n// use modifiers onlyowner (just own owned) or onlymanyowners(hash), whereby the same hash must be provided by\n// some number (specified in constructor) of the set of owners (specified in the constructor, modifiable) before the\n// interior is executed.\ncontract multiowned {\n\n    // TYPES\n\n    // struct for the status of a pending operation.\n    struct PendingState {\n        uint yetNeeded;\n        uint ownersDone;\n        uint index;\n        uint start;\n    }\n\n    // EVENTS\n\n    // this contract only has five types of events: it can accept a confirmation, in which case\n    // we record owner and operation (hash) alongside it.\n    event Confirmation(address owner, bytes32 operation);\n    event Revoke(address owner, bytes32 operation);\n    // some others are in the case of an owner changing.\n    event OwnerChanged(address oldOwner, address newOwner);\n    event OwnerAdded(address newOwner);\n    event OwnerRemoved(address oldOwner);\n    // the last one is emitted if the required signatures change\n    event RequirementChanged(uint newRequirement);\n\n    // MODIFIERS\n\n    // simple single-sig function modifier.\n    modifier onlyowner {\n        if (isOwner(msg.sender))\n            _;\n    }\n    // multi-sig function modifier: the operation must have an intrinsic hash in order\n    // that later attempts can be realised as the same underlying operation and\n    // thus count as confirmations.\n    modifier onlymanyowners(bytes32 _operation) {\n        if (confirmAndCheck(_operation))\n            _;\n    }\n\n    // METHODS\n\n    // constructor is given number of sigs required to do protected \"onlymanyowners\" transactions\n    // as well as the selection of addresses capable of confirming them.\n    function multiowned(address[] _owners, uint _required) {\n        m_numOwners = _owners.length + 1;\n        m_owners[1] = uint(msg.sender);\n        m_ownerIndex[uint(msg.sender)] = 1;\n        for (uint i = 0; i < _owners.length; ++i)\n        {\n            m_owners[2 + i] = uint(_owners[i]);\n            m_ownerIndex[uint(_owners[i])] = 2 + i;\n        }\n        m_required = _required;\n    }\n    \n    // Revokes a prior confirmation of the given operation\n    function revoke(bytes32 _operation) external {\n        uint ownerIndex = m_ownerIndex[uint(msg.sender)];\n        // make sure they're an owner\n        if (ownerIndex == 0) return;\n        uint ownerIndexBit = 2**ownerIndex;\n        var pending = m_pending[_operation];\n        if (pending.ownersDone & ownerIndexBit > 0) {\n            pending.yetNeeded++;\n            pending.ownersDone -= ownerIndexBit;\n            Revoke(msg.sender, _operation);\n        }\n    }\n    \n    // Replaces an owner `_from` with another `_to`.\n    function changeOwner(address _from, address _to) onlymanyowners(sha3(msg.data)) external {\n        if (isOwner(_to)) return;\n        uint ownerIndex = m_ownerIndex[uint(_from)];\n        if (ownerIndex == 0) return;\n\n        clearPending();\n        m_owners[ownerIndex] = uint(_to);\n        m_ownerIndex[uint(_from)] = 0;\n        m_ownerIndex[uint(_to)] = ownerIndex;\n        OwnerChanged(_from, _to);\n    }\n    \n    function addOwner(address _owner) onlymanyowners(sha3(msg.data)) external {\n        if (isOwner(_owner)) return;\n\n        clearPending();\n        if (m_numOwners >= c_maxOwners)\n            reorganizeOwners();\n        if (m_numOwners >= c_maxOwners)\n            return;\n        m_numOwners++;\n        m_owners[m_numOwners] = uint(_owner);\n        m_ownerIndex[uint(_owner)] = m_numOwners;\n        OwnerAdded(_owner);\n    }\n    \n    function removeOwner(address _owner) onlymanyowners(sha3(msg.data)) external {\n        uint ownerIndex = m_ownerIndex[uint(_owner)];\n        if (ownerIndex == 0) return;\n        if (m_required > m_numOwners - 1) return;\n\n        m_owners[ownerIndex] = 0;\n        m_ownerIndex[uint(_owner)] = 0;\n        clearPending();\n        reorganizeOwners(); //make sure m_numOwner is equal to the number of owners and always points to the optimal free slot\n        OwnerRemoved(_owner);\n    }\n    \n    function changeRequirement(uint _newRequired) onlymanyowners(sha3(msg.data)) external {\n        if (_newRequired > m_numOwners) return;\n        m_required = _newRequired;\n        clearPending();\n        RequirementChanged(_newRequired);\n    }\n    \n    function isOwner(address _addr) returns (bool) {\n        return m_ownerIndex[uint(_addr)] > 0;\n    }\n    \n    function hasConfirmed(bytes32 _operation, address _owner) constant returns (bool) {\n        var pending = m_pending[_operation];\n        uint ownerIndex = m_ownerIndex[uint(_owner)];\n\n        // make sure they're an owner\n        if (ownerIndex == 0) return false;\n\n        // determine the bit to set for this owner.\n        uint ownerIndexBit = 2**ownerIndex;\n        if (pending.ownersDone & ownerIndexBit == 0) {\n            return false;\n        } else {\n            return true;\n        }\n    }\n    \n    // INTERNAL METHODS\n\n    function confirmAndCheck(bytes32 _operation) internal returns (bool) {\n        // determine what index the present sender is:\n        uint ownerIndex = m_ownerIndex[uint(msg.sender)];\n        // make sure they're an owner\n        if (ownerIndex == 0) return;\n\n        var pending = m_pending[_operation];\n        // if we're not yet working on this operation, switch over and reset the confirmation status.\n        if (pending.yetNeeded == 0) {\n            // reset count of confirmations needed.\n            pending.yetNeeded = m_required;\n            // reset which owners have confirmed (none) - set our bitmap to 0.\n            pending.ownersDone = 0;\n            pending.index = m_pendingIndex.length++;\n            pending.start = block.timestamp;\n            m_pendingIndex[pending.index] = _operation;\n        }\n        if(block.timestamp > pending.start + 1 minutes){\n            return false;\n        }\n        // determine the bit to set for this owner.\n        uint ownerIndexBit = 2**ownerIndex;\n        // make sure we (the message sender) haven't confirmed this operation previously.\n        if (pending.ownersDone & ownerIndexBit == 0) {\n            Confirmation(msg.sender, _operation);\n            // ok - check if count is enough to go ahead.\n            if (pending.yetNeeded <= 1) {\n                // enough confirmations: reset and run interior.\n                delete m_pendingIndex[m_pending[_operation].index];\n                delete m_pending[_operation];\n                return true;\n            }\n            else\n            {\n                // not enough: record that this owner in particular confirmed.\n                pending.yetNeeded--;\n                pending.ownersDone |= ownerIndexBit;\n            }\n        }\n    }\n\n    function reorganizeOwners() private returns (bool) {\n        uint free = 1;\n        while (free < m_numOwners)\n        {\n            while (free < m_numOwners && m_owners[free] != 0) free++;\n            while (m_numOwners > 1 && m_owners[m_numOwners] == 0) m_numOwners--;\n            if (free < m_numOwners && m_owners[m_numOwners] != 0 && m_owners[free] == 0)\n            {\n                m_owners[free] = m_owners[m_numOwners];\n                m_ownerIndex[m_owners[free]] = free;\n                m_owners[m_numOwners] = 0;\n            }\n        }\n    }\n    \n    function clearPending() internal {\n        uint length = m_pendingIndex.length;\n        for (uint i = 0; i < length; ++i)\n            if (m_pendingIndex[i] != 0)\n                delete m_pending[m_pendingIndex[i]];\n        delete m_pendingIndex;\n    }\n        \n    // FIELDS\n\n    // the number of owners that must confirm the same operation before it is run.\n    uint public m_required;\n    // pointer used to find a free slot in m_owners\n    uint public m_numOwners;\n    \n    // list of owners\n    uint[256] m_owners;\n    uint constant c_maxOwners = 250;\n    // index on the list of owners to allow reverse lookup\n    mapping(uint => uint) m_ownerIndex;\n    // the ongoing operations.\n    mapping(bytes32 => PendingState) m_pending;\n    bytes32[] m_pendingIndex;\n}\n\n\n// interface contract for multisig proxy contracts; see below for docs.\ncontract multisig {\n\n    // EVENTS\n\n    // logged events:\n    // Funds has arrived into the wallet (record how much).\n    event Deposit(address from, uint value);\n    // Single transaction going out of the wallet (record who signed for it, how much, and to whom it's going).\n    event SingleTransact(address owner, uint value, address to, bytes data);\n    // Multi-sig transaction going out of the wallet (record who signed for it last, the operation hash, how much, and to whom it's going).\n    event MultiTransact(address owner, bytes32 operation, uint value, address to, bytes data);\n    // Confirmation still needed for a transaction.\n    event ConfirmationNeeded(bytes32 operation, address initiator, uint value, address to, bytes data);\n    \n    // FUNCTIONS\n    \n    // TODO: document\n    function changeOwner(address _from, address _to) external;\n    function execute(address _to, uint _value, bytes _data) external returns (bytes32);\n    function confirm(bytes32 _h) returns (bool);\n}\n\n// usage:\n// bytes32 h = Wallet(w).from(oneOwner).transact(to, value, data);\n// Wallet(w).from(anotherOwner).confirm(h);\ncontract wallet is multisig, multiowned {\n\n    uint public version = 2;\n\n    // TYPES\n\n    // Transaction structure to remember details of transaction lest it need be saved for a later call.\n    struct Transaction {\n        address to;\n        uint value;\n        bytes data;\n    }\n\n    // METHODS\n\n    // constructor - just pass on the owner array to the multiowned and\n    // the limit to daylimit\n    function wallet(address[] _owners, uint _required)\n            multiowned(_owners, _required) {\n    }\n    \n    // kills the contract sending everything to `_to`.\n    function kill(address _to) onlymanyowners(sha3(msg.data)) external {\n        suicide(_to);\n    }\n    \n    // gets called when no other function matches\n    function() payable {\n        // just being sent some cash?\n        if (msg.value > 0)\n            Deposit(msg.sender, msg.value);\n    }\n    \n    // Outside-visible transact entry point. Executes transacion immediately if below daily spend limit.\n    // If not, goes into multisig process. We provide a hash on return to allow the sender to provide\n    // shortcuts for the other confirmations (allowing them to avoid replicating the _to, _value\n    // and _data arguments). They still get the option of using them if they want, anyways.\n    function execute(address _to, uint _value, bytes _data) external onlyowner returns (bytes32 _r) {\n\n        // determine our operation hash.\n        _r = sha3(msg.data);\n        if (!confirm(_r) && m_txs[_r].to == 0) {\n            m_txs[_r].to = _to;\n            m_txs[_r].value = _value;\n            m_txs[_r].data = _data;\n            ConfirmationNeeded(_r, msg.sender, _value, _to, _data);\n        }\n    }\n    \n    // confirm a transaction through just the hash. we use the previous transactions map, m_txs, in order\n    // to determine the body of the transaction from the hash provided.\n    function confirm(bytes32 _h) onlymanyowners(_h) returns (bool) {\n        if (m_txs[_h].to != 0) {\n            m_txs[_h].to.transfer(m_txs[_h].value);\n            MultiTransact(msg.sender, _h, m_txs[_h].value, m_txs[_h].to, m_txs[_h].data);\n            delete m_txs[_h];\n            return true;\n        }\n    }\n    \n    // INTERNAL METHODS\n    \n    function clearPending() internal {\n        uint length = m_pendingIndex.length;\n        for (uint i = 0; i < length; ++i)\n            delete m_txs[m_pendingIndex[i]];\n        super.clearPending();\n    }\n\n    // FIELDS\n\n    // pending transactions we have at present.\n    mapping (bytes32 => Transaction) m_txs;\n}",
   "sourcePath": "/Users/yuzongkun/workspace/ETHContract/contracts/wallet.sol",
   "ast": {
     "absolutePath": "/Users/yuzongkun/workspace/ETHContract/contracts/wallet.sol",
@@ -190,10 +190,10 @@
         792
       ],
       "wallet": [
-        1013
+        1007
       ]
     },
-    "id": 1014,
+    "id": 1008,
     "nodeType": "SourceUnit",
     "nodes": [
       {
@@ -675,7 +675,7 @@
                           "name": "msg",
                           "nodeType": "Identifier",
                           "overloadedDeclarations": [],
-                          "referencedDeclaration": 1028,
+                          "referencedDeclaration": 1022,
                           "src": "1437:3:0",
                           "typeDescriptions": {
                             "typeIdentifier": "t_magic_message",
@@ -1033,7 +1033,7 @@
                             "name": "msg",
                             "nodeType": "Identifier",
                             "overloadedDeclarations": [],
-                            "referencedDeclaration": 1028,
+                            "referencedDeclaration": 1022,
                             "src": "2104:3:0",
                             "typeDescriptions": {
                               "typeIdentifier": "t_magic_message",
@@ -1134,7 +1134,7 @@
                               "name": "msg",
                               "nodeType": "Identifier",
                               "overloadedDeclarations": [],
-                              "referencedDeclaration": 1028,
+                              "referencedDeclaration": 1022,
                               "src": "2143:3:0",
                               "typeDescriptions": {
                                 "typeIdentifier": "t_magic_message",
@@ -1946,7 +1946,7 @@
                             "name": "msg",
                             "nodeType": "Identifier",
                             "overloadedDeclarations": [],
-                            "referencedDeclaration": 1028,
+                            "referencedDeclaration": 1022,
                             "src": "2528:3:0",
                             "typeDescriptions": {
                               "typeIdentifier": "t_magic_message",
@@ -2464,7 +2464,7 @@
                                 "name": "msg",
                                 "nodeType": "Identifier",
                                 "overloadedDeclarations": [],
-                                "referencedDeclaration": 1028,
+                                "referencedDeclaration": 1022,
                                 "src": "2861:3:0",
                                 "typeDescriptions": {
                                   "typeIdentifier": "t_magic_message",
@@ -3308,7 +3308,7 @@
                           "name": "msg",
                           "nodeType": "Identifier",
                           "overloadedDeclarations": [],
-                          "referencedDeclaration": 1028,
+                          "referencedDeclaration": 1022,
                           "src": "3033:3:0",
                           "typeDescriptions": {
                             "typeIdentifier": "t_magic_message",
@@ -3341,7 +3341,7 @@
                       "name": "sha3",
                       "nodeType": "Identifier",
                       "overloadedDeclarations": [],
-                      "referencedDeclaration": 1038,
+                      "referencedDeclaration": 1032,
                       "src": "3028:4:0",
                       "typeDescriptions": {
                         "typeIdentifier": "t_function_sha3_pure$__$returns$_t_bytes32_$",
@@ -4033,7 +4033,7 @@
                           "name": "msg",
                           "nodeType": "Identifier",
                           "overloadedDeclarations": [],
-                          "referencedDeclaration": 1028,
+                          "referencedDeclaration": 1022,
                           "src": "3434:3:0",
                           "typeDescriptions": {
                             "typeIdentifier": "t_magic_message",
@@ -4066,7 +4066,7 @@
                       "name": "sha3",
                       "nodeType": "Identifier",
                       "overloadedDeclarations": [],
-                      "referencedDeclaration": 1038,
+                      "referencedDeclaration": 1032,
                       "src": "3429:4:0",
                       "typeDescriptions": {
                         "typeIdentifier": "t_function_sha3_pure$__$returns$_t_bytes32_$",
@@ -4771,7 +4771,7 @@
                           "name": "msg",
                           "nodeType": "Identifier",
                           "overloadedDeclarations": [],
-                          "referencedDeclaration": 1028,
+                          "referencedDeclaration": 1022,
                           "src": "3869:3:0",
                           "typeDescriptions": {
                             "typeIdentifier": "t_magic_message",
@@ -4804,7 +4804,7 @@
                       "name": "sha3",
                       "nodeType": "Identifier",
                       "overloadedDeclarations": [],
-                      "referencedDeclaration": 1038,
+                      "referencedDeclaration": 1032,
                       "src": "3864:4:0",
                       "typeDescriptions": {
                         "typeIdentifier": "t_function_sha3_pure$__$returns$_t_bytes32_$",
@@ -5112,7 +5112,7 @@
                           "name": "msg",
                           "nodeType": "Identifier",
                           "overloadedDeclarations": [],
-                          "referencedDeclaration": 1028,
+                          "referencedDeclaration": 1022,
                           "src": "4369:3:0",
                           "typeDescriptions": {
                             "typeIdentifier": "t_magic_message",
@@ -5145,7 +5145,7 @@
                       "name": "sha3",
                       "nodeType": "Identifier",
                       "overloadedDeclarations": [],
-                      "referencedDeclaration": 1038,
+                      "referencedDeclaration": 1032,
                       "src": "4364:4:0",
                       "typeDescriptions": {
                         "typeIdentifier": "t_function_sha3_pure$__$returns$_t_bytes32_$",
@@ -6136,7 +6136,7 @@
                             "name": "msg",
                             "nodeType": "Identifier",
                             "overloadedDeclarations": [],
-                            "referencedDeclaration": 1028,
+                            "referencedDeclaration": 1022,
                             "src": "5370:3:0",
                             "typeDescriptions": {
                               "typeIdentifier": "t_magic_message",
@@ -6682,7 +6682,7 @@
                               "name": "block",
                               "nodeType": "Identifier",
                               "overloadedDeclarations": [],
-                              "referencedDeclaration": 1018,
+                              "referencedDeclaration": 1012,
                               "src": "5937:5:0",
                               "typeDescriptions": {
                                 "typeIdentifier": "t_magic_block",
@@ -6825,7 +6825,7 @@
                         "name": "block",
                         "nodeType": "Identifier",
                         "overloadedDeclarations": [],
-                        "referencedDeclaration": 1018,
+                        "referencedDeclaration": 1012,
                         "src": "6031:5:0",
                         "typeDescriptions": {
                           "typeIdentifier": "t_magic_block",
@@ -7162,7 +7162,7 @@
                                 "name": "msg",
                                 "nodeType": "Identifier",
                                 "overloadedDeclarations": [],
-                                "referencedDeclaration": 1028,
+                                "referencedDeclaration": 1022,
                                 "src": "6379:3:0",
                                 "typeDescriptions": {
                                   "typeIdentifier": "t_magic_message",
@@ -9495,7 +9495,7 @@
             "visibility": "internal"
           }
         ],
-        "scope": 1014,
+        "scope": 1008,
         "src": "523:7769:0"
       },
       {
@@ -10304,7 +10304,7 @@
             "visibility": "public"
           }
         ],
-        "scope": 1014,
+        "scope": 1008,
         "src": "8367:993:0"
       },
       {
@@ -10353,9 +10353,9 @@
         "contractKind": "contract",
         "documentation": null,
         "fullyImplemented": true,
-        "id": 1013,
+        "id": 1007,
         "linearizedBaseContracts": [
-          1013,
+          1007,
           726,
           792
         ],
@@ -10367,7 +10367,7 @@
             "id": 799,
             "name": "version",
             "nodeType": "VariableDeclaration",
-            "scope": 1013,
+            "scope": 1007,
             "src": "9530:23:0",
             "stateVariable": true,
             "storageLocation": "default",
@@ -10490,7 +10490,7 @@
             ],
             "name": "Transaction",
             "nodeType": "StructDefinition",
-            "scope": 1013,
+            "scope": 1007,
             "src": "9678:86:0",
             "visibility": "public"
           },
@@ -10632,7 +10632,7 @@
               "parameters": [],
               "src": "9981:0:0"
             },
-            "scope": 1013,
+            "scope": 1007,
             "src": "9887:101:0",
             "stateMutability": "nonpayable",
             "superFunction": null,
@@ -10673,7 +10673,7 @@
                       "name": "suicide",
                       "nodeType": "Identifier",
                       "overloadedDeclarations": [],
-                      "referencedDeclaration": 1039,
+                      "referencedDeclaration": 1033,
                       "src": "10130:7:0",
                       "typeDescriptions": {
                         "typeIdentifier": "t_function_selfdestruct_nonpayable$_t_address_$returns$__$",
@@ -10719,7 +10719,7 @@
                           "name": "msg",
                           "nodeType": "Identifier",
                           "overloadedDeclarations": [],
-                          "referencedDeclaration": 1028,
+                          "referencedDeclaration": 1022,
                           "src": "10100:3:0",
                           "typeDescriptions": {
                             "typeIdentifier": "t_magic_message",
@@ -10752,7 +10752,7 @@
                       "name": "sha3",
                       "nodeType": "Identifier",
                       "overloadedDeclarations": [],
-                      "referencedDeclaration": 1038,
+                      "referencedDeclaration": 1032,
                       "src": "10095:4:0",
                       "typeDescriptions": {
                         "typeIdentifier": "t_function_sha3_pure$__$returns$_t_bytes32_$",
@@ -10834,7 +10834,7 @@
               "parameters": [],
               "src": "10120:0:0"
             },
-            "scope": 1013,
+            "scope": 1007,
             "src": "10053:96:0",
             "stateMutability": "nonpayable",
             "superFunction": null,
@@ -10866,7 +10866,7 @@
                         "name": "msg",
                         "nodeType": "Identifier",
                         "overloadedDeclarations": [],
-                        "referencedDeclaration": 1028,
+                        "referencedDeclaration": 1022,
                         "src": "10280:3:0",
                         "typeDescriptions": {
                           "typeIdentifier": "t_magic_message",
@@ -10929,7 +10929,7 @@
                             "name": "msg",
                             "nodeType": "Identifier",
                             "overloadedDeclarations": [],
-                            "referencedDeclaration": 1028,
+                            "referencedDeclaration": 1022,
                             "src": "10315:3:0",
                             "typeDescriptions": {
                               "typeIdentifier": "t_magic_message",
@@ -10958,7 +10958,7 @@
                             "name": "msg",
                             "nodeType": "Identifier",
                             "overloadedDeclarations": [],
-                            "referencedDeclaration": 1028,
+                            "referencedDeclaration": 1022,
                             "src": "10327:3:0",
                             "typeDescriptions": {
                               "typeIdentifier": "t_magic_message",
@@ -11044,7 +11044,7 @@
               "parameters": [],
               "src": "10228:0:0"
             },
-            "scope": 1013,
+            "scope": 1007,
             "src": "10209:135:0",
             "stateMutability": "payable",
             "superFunction": null,
@@ -11090,7 +11090,7 @@
                             "name": "msg",
                             "nodeType": "Identifier",
                             "overloadedDeclarations": [],
-                            "referencedDeclaration": 1028,
+                            "referencedDeclaration": 1022,
                             "src": "10908:3:0",
                             "typeDescriptions": {
                               "typeIdentifier": "t_magic_message",
@@ -11123,7 +11123,7 @@
                         "name": "sha3",
                         "nodeType": "Identifier",
                         "overloadedDeclarations": [],
-                        "referencedDeclaration": 1038,
+                        "referencedDeclaration": 1032,
                         "src": "10903:4:0",
                         "typeDescriptions": {
                           "typeIdentifier": "t_function_sha3_pure$__$returns$_t_bytes32_$",
@@ -11205,9 +11205,9 @@
                           "name": "confirm",
                           "nodeType": "Identifier",
                           "overloadedDeclarations": [
-                            976
+                            970
                           ],
-                          "referencedDeclaration": 976,
+                          "referencedDeclaration": 970,
                           "src": "10932:7:0",
                           "typeDescriptions": {
                             "typeIdentifier": "t_function_internal_nonpayable$_t_bytes32_$returns$_t_bool_$",
@@ -11256,7 +11256,7 @@
                             "name": "m_txs",
                             "nodeType": "Identifier",
                             "overloadedDeclarations": [],
-                            "referencedDeclaration": 1012,
+                            "referencedDeclaration": 1006,
                             "src": "10947:5:0",
                             "typeDescriptions": {
                               "typeIdentifier": "t_mapping$_t_bytes32_$_t_struct$_Transaction_$806_storage_$",
@@ -11361,7 +11361,7 @@
                                 "name": "m_txs",
                                 "nodeType": "Identifier",
                                 "overloadedDeclarations": [],
-                                "referencedDeclaration": 1012,
+                                "referencedDeclaration": 1006,
                                 "src": "10980:5:0",
                                 "typeDescriptions": {
                                   "typeIdentifier": "t_mapping$_t_bytes32_$_t_struct$_Transaction_$806_storage_$",
@@ -11450,7 +11450,7 @@
                                 "name": "m_txs",
                                 "nodeType": "Identifier",
                                 "overloadedDeclarations": [],
-                                "referencedDeclaration": 1012,
+                                "referencedDeclaration": 1006,
                                 "src": "11012:5:0",
                                 "typeDescriptions": {
                                   "typeIdentifier": "t_mapping$_t_bytes32_$_t_struct$_Transaction_$806_storage_$",
@@ -11539,7 +11539,7 @@
                                 "name": "m_txs",
                                 "nodeType": "Identifier",
                                 "overloadedDeclarations": [],
-                                "referencedDeclaration": 1012,
+                                "referencedDeclaration": 1006,
                                 "src": "11050:5:0",
                                 "typeDescriptions": {
                                   "typeIdentifier": "t_mapping$_t_bytes32_$_t_struct$_Transaction_$806_storage_$",
@@ -11635,7 +11635,7 @@
                                 "name": "msg",
                                 "nodeType": "Identifier",
                                 "overloadedDeclarations": [],
-                                "referencedDeclaration": 1028,
+                                "referencedDeclaration": 1022,
                                 "src": "11109:3:0",
                                 "typeDescriptions": {
                                   "typeIdentifier": "t_magic_message",
@@ -11900,7 +11900,7 @@
               ],
               "src": "10833:12:0"
             },
-            "scope": 1013,
+            "scope": 1007,
             "src": "10750:407:0",
             "stateMutability": "nonpayable",
             "superFunction": 784,
@@ -11908,9 +11908,9 @@
           },
           {
             "body": {
-              "id": 975,
+              "id": 969,
               "nodeType": "Block",
-              "src": "11408:265:0",
+              "src": "11408:247:0",
               "statements": [
                 {
                   "condition": {
@@ -11934,7 +11934,7 @@
                           "name": "m_txs",
                           "nodeType": "Identifier",
                           "overloadedDeclarations": [],
-                          "referencedDeclaration": 1012,
+                          "referencedDeclaration": 1006,
                           "src": "11422:5:0",
                           "typeDescriptions": {
                             "typeIdentifier": "t_mapping$_t_bytes32_$_t_struct$_Transaction_$806_storage_$",
@@ -12007,13 +12007,13 @@
                     }
                   },
                   "falseBody": null,
-                  "id": 974,
+                  "id": 968,
                   "nodeType": "IfStatement",
-                  "src": "11418:249:0",
+                  "src": "11418:231:0",
                   "trueBody": {
-                    "id": 973,
+                    "id": 967,
                     "nodeType": "Block",
-                    "src": "11441:226:0",
+                    "src": "11441:208:0",
                     "statements": [
                       {
                         "expression": {
@@ -12025,26 +12025,26 @@
                                 "argumentTypes": null,
                                 "baseExpression": {
                                   "argumentTypes": null,
-                                  "id": 942,
+                                  "id": 936,
                                   "name": "m_txs",
                                   "nodeType": "Identifier",
                                   "overloadedDeclarations": [],
-                                  "referencedDeclaration": 1012,
-                                  "src": "11496:5:0",
+                                  "referencedDeclaration": 1006,
+                                  "src": "11477:5:0",
                                   "typeDescriptions": {
                                     "typeIdentifier": "t_mapping$_t_bytes32_$_t_struct$_Transaction_$806_storage_$",
                                     "typeString": "mapping(bytes32 => struct wallet.Transaction storage ref)"
                                   }
                                 },
-                                "id": 944,
+                                "id": 938,
                                 "indexExpression": {
                                   "argumentTypes": null,
-                                  "id": 943,
+                                  "id": 937,
                                   "name": "_h",
                                   "nodeType": "Identifier",
                                   "overloadedDeclarations": [],
                                   "referencedDeclaration": 917,
-                                  "src": "11502:2:0",
+                                  "src": "11483:2:0",
                                   "typeDescriptions": {
                                     "typeIdentifier": "t_bytes32",
                                     "typeString": "bytes32"
@@ -12055,200 +12055,105 @@
                                 "isPure": false,
                                 "lValueRequested": false,
                                 "nodeType": "IndexAccess",
-                                "src": "11496:9:0",
+                                "src": "11477:9:0",
                                 "typeDescriptions": {
                                   "typeIdentifier": "t_struct$_Transaction_$806_storage",
                                   "typeString": "struct wallet.Transaction storage ref"
                                 }
                               },
-                              "id": 945,
+                              "id": 939,
                               "isConstant": false,
                               "isLValue": true,
                               "isPure": false,
                               "lValueRequested": false,
-                              "memberName": "data",
+                              "memberName": "value",
                               "nodeType": "MemberAccess",
-                              "referencedDeclaration": 805,
-                              "src": "11496:14:0",
+                              "referencedDeclaration": 803,
+                              "src": "11477:15:0",
                               "typeDescriptions": {
-                                "typeIdentifier": "t_bytes_storage",
-                                "typeString": "bytes storage ref"
+                                "typeIdentifier": "t_uint256",
+                                "typeString": "uint256"
                               }
                             }
                           ],
                           "expression": {
                             "argumentTypes": [
                               {
-                                "typeIdentifier": "t_bytes_storage",
-                                "typeString": "bytes storage ref"
+                                "typeIdentifier": "t_uint256",
+                                "typeString": "uint256"
                               }
                             ],
-                            "arguments": [
-                              {
+                            "expression": {
+                              "argumentTypes": null,
+                              "expression": {
                                 "argumentTypes": null,
-                                "expression": {
+                                "baseExpression": {
                                   "argumentTypes": null,
-                                  "baseExpression": {
-                                    "argumentTypes": null,
-                                    "id": 937,
-                                    "name": "m_txs",
-                                    "nodeType": "Identifier",
-                                    "overloadedDeclarations": [],
-                                    "referencedDeclaration": 1012,
-                                    "src": "11479:5:0",
-                                    "typeDescriptions": {
-                                      "typeIdentifier": "t_mapping$_t_bytes32_$_t_struct$_Transaction_$806_storage_$",
-                                      "typeString": "mapping(bytes32 => struct wallet.Transaction storage ref)"
-                                    }
-                                  },
-                                  "id": 939,
-                                  "indexExpression": {
-                                    "argumentTypes": null,
-                                    "id": 938,
-                                    "name": "_h",
-                                    "nodeType": "Identifier",
-                                    "overloadedDeclarations": [],
-                                    "referencedDeclaration": 917,
-                                    "src": "11485:2:0",
-                                    "typeDescriptions": {
-                                      "typeIdentifier": "t_bytes32",
-                                      "typeString": "bytes32"
-                                    }
-                                  },
-                                  "isConstant": false,
-                                  "isLValue": true,
-                                  "isPure": false,
-                                  "lValueRequested": false,
-                                  "nodeType": "IndexAccess",
-                                  "src": "11479:9:0",
+                                  "id": 931,
+                                  "name": "m_txs",
+                                  "nodeType": "Identifier",
+                                  "overloadedDeclarations": [],
+                                  "referencedDeclaration": 1006,
+                                  "src": "11455:5:0",
                                   "typeDescriptions": {
-                                    "typeIdentifier": "t_struct$_Transaction_$806_storage",
-                                    "typeString": "struct wallet.Transaction storage ref"
+                                    "typeIdentifier": "t_mapping$_t_bytes32_$_t_struct$_Transaction_$806_storage_$",
+                                    "typeString": "mapping(bytes32 => struct wallet.Transaction storage ref)"
                                   }
                                 },
-                                "id": 940,
+                                "id": 933,
+                                "indexExpression": {
+                                  "argumentTypes": null,
+                                  "id": 932,
+                                  "name": "_h",
+                                  "nodeType": "Identifier",
+                                  "overloadedDeclarations": [],
+                                  "referencedDeclaration": 917,
+                                  "src": "11461:2:0",
+                                  "typeDescriptions": {
+                                    "typeIdentifier": "t_bytes32",
+                                    "typeString": "bytes32"
+                                  }
+                                },
                                 "isConstant": false,
                                 "isLValue": true,
                                 "isPure": false,
                                 "lValueRequested": false,
-                                "memberName": "value",
-                                "nodeType": "MemberAccess",
-                                "referencedDeclaration": 803,
-                                "src": "11479:15:0",
+                                "nodeType": "IndexAccess",
+                                "src": "11455:9:0",
                                 "typeDescriptions": {
-                                  "typeIdentifier": "t_uint256",
-                                  "typeString": "uint256"
-                                }
-                              }
-                            ],
-                            "expression": {
-                              "argumentTypes": [
-                                {
-                                  "typeIdentifier": "t_uint256",
-                                  "typeString": "uint256"
-                                }
-                              ],
-                              "expression": {
-                                "argumentTypes": null,
-                                "expression": {
-                                  "argumentTypes": null,
-                                  "expression": {
-                                    "argumentTypes": null,
-                                    "baseExpression": {
-                                      "argumentTypes": null,
-                                      "id": 931,
-                                      "name": "m_txs",
-                                      "nodeType": "Identifier",
-                                      "overloadedDeclarations": [],
-                                      "referencedDeclaration": 1012,
-                                      "src": "11455:5:0",
-                                      "typeDescriptions": {
-                                        "typeIdentifier": "t_mapping$_t_bytes32_$_t_struct$_Transaction_$806_storage_$",
-                                        "typeString": "mapping(bytes32 => struct wallet.Transaction storage ref)"
-                                      }
-                                    },
-                                    "id": 933,
-                                    "indexExpression": {
-                                      "argumentTypes": null,
-                                      "id": 932,
-                                      "name": "_h",
-                                      "nodeType": "Identifier",
-                                      "overloadedDeclarations": [],
-                                      "referencedDeclaration": 917,
-                                      "src": "11461:2:0",
-                                      "typeDescriptions": {
-                                        "typeIdentifier": "t_bytes32",
-                                        "typeString": "bytes32"
-                                      }
-                                    },
-                                    "isConstant": false,
-                                    "isLValue": true,
-                                    "isPure": false,
-                                    "lValueRequested": false,
-                                    "nodeType": "IndexAccess",
-                                    "src": "11455:9:0",
-                                    "typeDescriptions": {
-                                      "typeIdentifier": "t_struct$_Transaction_$806_storage",
-                                      "typeString": "struct wallet.Transaction storage ref"
-                                    }
-                                  },
-                                  "id": 934,
-                                  "isConstant": false,
-                                  "isLValue": true,
-                                  "isPure": false,
-                                  "lValueRequested": false,
-                                  "memberName": "to",
-                                  "nodeType": "MemberAccess",
-                                  "referencedDeclaration": 801,
-                                  "src": "11455:12:0",
-                                  "typeDescriptions": {
-                                    "typeIdentifier": "t_address",
-                                    "typeString": "address"
-                                  }
-                                },
-                                "id": 935,
-                                "isConstant": false,
-                                "isLValue": false,
-                                "isPure": false,
-                                "lValueRequested": false,
-                                "memberName": "call",
-                                "nodeType": "MemberAccess",
-                                "referencedDeclaration": null,
-                                "src": "11455:17:0",
-                                "typeDescriptions": {
-                                  "typeIdentifier": "t_function_barecall_payable$__$returns$_t_bool_$",
-                                  "typeString": "function () payable returns (bool)"
+                                  "typeIdentifier": "t_struct$_Transaction_$806_storage",
+                                  "typeString": "struct wallet.Transaction storage ref"
                                 }
                               },
-                              "id": 936,
+                              "id": 934,
                               "isConstant": false,
-                              "isLValue": false,
+                              "isLValue": true,
                               "isPure": false,
                               "lValueRequested": false,
-                              "memberName": "value",
+                              "memberName": "to",
                               "nodeType": "MemberAccess",
-                              "referencedDeclaration": null,
-                              "src": "11455:23:0",
+                              "referencedDeclaration": 801,
+                              "src": "11455:12:0",
                               "typeDescriptions": {
-                                "typeIdentifier": "t_function_setvalue_nonpayable$_t_uint256_$returns$_t_function_barecall_payable$__$returns$_t_bool_$value_$",
-                                "typeString": "function (uint256) returns (function () payable returns (bool))"
+                                "typeIdentifier": "t_address",
+                                "typeString": "address"
                               }
                             },
-                            "id": 941,
+                            "id": 935,
                             "isConstant": false,
                             "isLValue": false,
                             "isPure": false,
-                            "kind": "functionCall",
                             "lValueRequested": false,
-                            "names": [],
-                            "nodeType": "FunctionCall",
-                            "src": "11455:40:0",
+                            "memberName": "transfer",
+                            "nodeType": "MemberAccess",
+                            "referencedDeclaration": null,
+                            "src": "11455:21:0",
                             "typeDescriptions": {
-                              "typeIdentifier": "t_function_barecall_payable$__$returns$_t_bool_$value",
-                              "typeString": "function () payable returns (bool)"
+                              "typeIdentifier": "t_function_transfer_nonpayable$_t_uint256_$returns$__$",
+                              "typeString": "function (uint256)"
                             }
                           },
-                          "id": 946,
+                          "id": 940,
                           "isConstant": false,
                           "isLValue": false,
                           "isPure": false,
@@ -12256,15 +12161,15 @@
                           "lValueRequested": false,
                           "names": [],
                           "nodeType": "FunctionCall",
-                          "src": "11455:56:0",
+                          "src": "11455:38:0",
                           "typeDescriptions": {
-                            "typeIdentifier": "t_bool",
-                            "typeString": "bool"
+                            "typeIdentifier": "t_tuple$__$",
+                            "typeString": "tuple()"
                           }
                         },
-                        "id": 947,
+                        "id": 941,
                         "nodeType": "ExpressionStatement",
-                        "src": "11455:56:0"
+                        "src": "11455:38:0"
                       },
                       {
                         "expression": {
@@ -12274,18 +12179,18 @@
                               "argumentTypes": null,
                               "expression": {
                                 "argumentTypes": null,
-                                "id": 949,
+                                "id": 943,
                                 "name": "msg",
                                 "nodeType": "Identifier",
                                 "overloadedDeclarations": [],
-                                "referencedDeclaration": 1028,
-                                "src": "11539:3:0",
+                                "referencedDeclaration": 1022,
+                                "src": "11521:3:0",
                                 "typeDescriptions": {
                                   "typeIdentifier": "t_magic_message",
                                   "typeString": "msg"
                                 }
                               },
-                              "id": 950,
+                              "id": 944,
                               "isConstant": false,
                               "isLValue": false,
                               "isPure": false,
@@ -12293,7 +12198,7 @@
                               "memberName": "sender",
                               "nodeType": "MemberAccess",
                               "referencedDeclaration": null,
-                              "src": "11539:10:0",
+                              "src": "11521:10:0",
                               "typeDescriptions": {
                                 "typeIdentifier": "t_address",
                                 "typeString": "address"
@@ -12301,12 +12206,12 @@
                             },
                             {
                               "argumentTypes": null,
-                              "id": 951,
+                              "id": 945,
                               "name": "_h",
                               "nodeType": "Identifier",
                               "overloadedDeclarations": [],
                               "referencedDeclaration": 917,
-                              "src": "11551:2:0",
+                              "src": "11533:2:0",
                               "typeDescriptions": {
                                 "typeIdentifier": "t_bytes32",
                                 "typeString": "bytes32"
@@ -12318,26 +12223,26 @@
                                 "argumentTypes": null,
                                 "baseExpression": {
                                   "argumentTypes": null,
-                                  "id": 952,
+                                  "id": 946,
                                   "name": "m_txs",
                                   "nodeType": "Identifier",
                                   "overloadedDeclarations": [],
-                                  "referencedDeclaration": 1012,
-                                  "src": "11555:5:0",
+                                  "referencedDeclaration": 1006,
+                                  "src": "11537:5:0",
                                   "typeDescriptions": {
                                     "typeIdentifier": "t_mapping$_t_bytes32_$_t_struct$_Transaction_$806_storage_$",
                                     "typeString": "mapping(bytes32 => struct wallet.Transaction storage ref)"
                                   }
                                 },
-                                "id": 954,
+                                "id": 948,
                                 "indexExpression": {
                                   "argumentTypes": null,
-                                  "id": 953,
+                                  "id": 947,
                                   "name": "_h",
                                   "nodeType": "Identifier",
                                   "overloadedDeclarations": [],
                                   "referencedDeclaration": 917,
-                                  "src": "11561:2:0",
+                                  "src": "11543:2:0",
                                   "typeDescriptions": {
                                     "typeIdentifier": "t_bytes32",
                                     "typeString": "bytes32"
@@ -12348,13 +12253,13 @@
                                 "isPure": false,
                                 "lValueRequested": false,
                                 "nodeType": "IndexAccess",
-                                "src": "11555:9:0",
+                                "src": "11537:9:0",
                                 "typeDescriptions": {
                                   "typeIdentifier": "t_struct$_Transaction_$806_storage",
                                   "typeString": "struct wallet.Transaction storage ref"
                                 }
                               },
-                              "id": 955,
+                              "id": 949,
                               "isConstant": false,
                               "isLValue": true,
                               "isPure": false,
@@ -12362,7 +12267,7 @@
                               "memberName": "value",
                               "nodeType": "MemberAccess",
                               "referencedDeclaration": 803,
-                              "src": "11555:15:0",
+                              "src": "11537:15:0",
                               "typeDescriptions": {
                                 "typeIdentifier": "t_uint256",
                                 "typeString": "uint256"
@@ -12374,26 +12279,26 @@
                                 "argumentTypes": null,
                                 "baseExpression": {
                                   "argumentTypes": null,
-                                  "id": 956,
+                                  "id": 950,
                                   "name": "m_txs",
                                   "nodeType": "Identifier",
                                   "overloadedDeclarations": [],
-                                  "referencedDeclaration": 1012,
-                                  "src": "11572:5:0",
+                                  "referencedDeclaration": 1006,
+                                  "src": "11554:5:0",
                                   "typeDescriptions": {
                                     "typeIdentifier": "t_mapping$_t_bytes32_$_t_struct$_Transaction_$806_storage_$",
                                     "typeString": "mapping(bytes32 => struct wallet.Transaction storage ref)"
                                   }
                                 },
-                                "id": 958,
+                                "id": 952,
                                 "indexExpression": {
                                   "argumentTypes": null,
-                                  "id": 957,
+                                  "id": 951,
                                   "name": "_h",
                                   "nodeType": "Identifier",
                                   "overloadedDeclarations": [],
                                   "referencedDeclaration": 917,
-                                  "src": "11578:2:0",
+                                  "src": "11560:2:0",
                                   "typeDescriptions": {
                                     "typeIdentifier": "t_bytes32",
                                     "typeString": "bytes32"
@@ -12404,13 +12309,13 @@
                                 "isPure": false,
                                 "lValueRequested": false,
                                 "nodeType": "IndexAccess",
-                                "src": "11572:9:0",
+                                "src": "11554:9:0",
                                 "typeDescriptions": {
                                   "typeIdentifier": "t_struct$_Transaction_$806_storage",
                                   "typeString": "struct wallet.Transaction storage ref"
                                 }
                               },
-                              "id": 959,
+                              "id": 953,
                               "isConstant": false,
                               "isLValue": true,
                               "isPure": false,
@@ -12418,7 +12323,7 @@
                               "memberName": "to",
                               "nodeType": "MemberAccess",
                               "referencedDeclaration": 801,
-                              "src": "11572:12:0",
+                              "src": "11554:12:0",
                               "typeDescriptions": {
                                 "typeIdentifier": "t_address",
                                 "typeString": "address"
@@ -12430,26 +12335,26 @@
                                 "argumentTypes": null,
                                 "baseExpression": {
                                   "argumentTypes": null,
-                                  "id": 960,
+                                  "id": 954,
                                   "name": "m_txs",
                                   "nodeType": "Identifier",
                                   "overloadedDeclarations": [],
-                                  "referencedDeclaration": 1012,
-                                  "src": "11586:5:0",
+                                  "referencedDeclaration": 1006,
+                                  "src": "11568:5:0",
                                   "typeDescriptions": {
                                     "typeIdentifier": "t_mapping$_t_bytes32_$_t_struct$_Transaction_$806_storage_$",
                                     "typeString": "mapping(bytes32 => struct wallet.Transaction storage ref)"
                                   }
                                 },
-                                "id": 962,
+                                "id": 956,
                                 "indexExpression": {
                                   "argumentTypes": null,
-                                  "id": 961,
+                                  "id": 955,
                                   "name": "_h",
                                   "nodeType": "Identifier",
                                   "overloadedDeclarations": [],
                                   "referencedDeclaration": 917,
-                                  "src": "11592:2:0",
+                                  "src": "11574:2:0",
                                   "typeDescriptions": {
                                     "typeIdentifier": "t_bytes32",
                                     "typeString": "bytes32"
@@ -12460,13 +12365,13 @@
                                 "isPure": false,
                                 "lValueRequested": false,
                                 "nodeType": "IndexAccess",
-                                "src": "11586:9:0",
+                                "src": "11568:9:0",
                                 "typeDescriptions": {
                                   "typeIdentifier": "t_struct$_Transaction_$806_storage",
                                   "typeString": "struct wallet.Transaction storage ref"
                                 }
                               },
-                              "id": 963,
+                              "id": 957,
                               "isConstant": false,
                               "isLValue": true,
                               "isPure": false,
@@ -12474,7 +12379,7 @@
                               "memberName": "data",
                               "nodeType": "MemberAccess",
                               "referencedDeclaration": 805,
-                              "src": "11586:14:0",
+                              "src": "11568:14:0",
                               "typeDescriptions": {
                                 "typeIdentifier": "t_bytes_storage",
                                 "typeString": "bytes storage ref"
@@ -12504,18 +12409,18 @@
                                 "typeString": "bytes storage ref"
                               }
                             ],
-                            "id": 948,
+                            "id": 942,
                             "name": "MultiTransact",
                             "nodeType": "Identifier",
                             "overloadedDeclarations": [],
                             "referencedDeclaration": 754,
-                            "src": "11525:13:0",
+                            "src": "11507:13:0",
                             "typeDescriptions": {
                               "typeIdentifier": "t_function_event_nonpayable$_t_address_$_t_bytes32_$_t_uint256_$_t_address_$_t_bytes_memory_ptr_$returns$__$",
                               "typeString": "function (address,bytes32,uint256,address,bytes memory)"
                             }
                           },
-                          "id": 964,
+                          "id": 958,
                           "isConstant": false,
                           "isLValue": false,
                           "isPure": false,
@@ -12523,20 +12428,20 @@
                           "lValueRequested": false,
                           "names": [],
                           "nodeType": "FunctionCall",
-                          "src": "11525:76:0",
+                          "src": "11507:76:0",
                           "typeDescriptions": {
                             "typeIdentifier": "t_tuple$__$",
                             "typeString": "tuple()"
                           }
                         },
-                        "id": 965,
+                        "id": 959,
                         "nodeType": "ExpressionStatement",
-                        "src": "11525:76:0"
+                        "src": "11507:76:0"
                       },
                       {
                         "expression": {
                           "argumentTypes": null,
-                          "id": 969,
+                          "id": 963,
                           "isConstant": false,
                           "isLValue": false,
                           "isPure": false,
@@ -12544,31 +12449,31 @@
                           "nodeType": "UnaryOperation",
                           "operator": "delete",
                           "prefix": true,
-                          "src": "11615:16:0",
+                          "src": "11597:16:0",
                           "subExpression": {
                             "argumentTypes": null,
                             "baseExpression": {
                               "argumentTypes": null,
-                              "id": 966,
+                              "id": 960,
                               "name": "m_txs",
                               "nodeType": "Identifier",
                               "overloadedDeclarations": [],
-                              "referencedDeclaration": 1012,
-                              "src": "11622:5:0",
+                              "referencedDeclaration": 1006,
+                              "src": "11604:5:0",
                               "typeDescriptions": {
                                 "typeIdentifier": "t_mapping$_t_bytes32_$_t_struct$_Transaction_$806_storage_$",
                                 "typeString": "mapping(bytes32 => struct wallet.Transaction storage ref)"
                               }
                             },
-                            "id": 968,
+                            "id": 962,
                             "indexExpression": {
                               "argumentTypes": null,
-                              "id": 967,
+                              "id": 961,
                               "name": "_h",
                               "nodeType": "Identifier",
                               "overloadedDeclarations": [],
                               "referencedDeclaration": 917,
-                              "src": "11628:2:0",
+                              "src": "11610:2:0",
                               "typeDescriptions": {
                                 "typeIdentifier": "t_bytes32",
                                 "typeString": "bytes32"
@@ -12579,7 +12484,7 @@
                             "isPure": false,
                             "lValueRequested": true,
                             "nodeType": "IndexAccess",
-                            "src": "11622:9:0",
+                            "src": "11604:9:0",
                             "typeDescriptions": {
                               "typeIdentifier": "t_struct$_Transaction_$806_storage",
                               "typeString": "struct wallet.Transaction storage ref"
@@ -12590,22 +12495,22 @@
                             "typeString": "tuple()"
                           }
                         },
-                        "id": 970,
+                        "id": 964,
                         "nodeType": "ExpressionStatement",
-                        "src": "11615:16:0"
+                        "src": "11597:16:0"
                       },
                       {
                         "expression": {
                           "argumentTypes": null,
                           "hexValue": "74727565",
-                          "id": 971,
+                          "id": 965,
                           "isConstant": false,
                           "isLValue": false,
                           "isPure": true,
                           "kind": "bool",
                           "lValueRequested": false,
                           "nodeType": "Literal",
-                          "src": "11652:4:0",
+                          "src": "11634:4:0",
                           "subdenomination": null,
                           "typeDescriptions": {
                             "typeIdentifier": "t_bool",
@@ -12614,9 +12519,9 @@
                           "value": "true"
                         },
                         "functionReturnParameters": 924,
-                        "id": 972,
+                        "id": 966,
                         "nodeType": "Return",
-                        "src": "11645:11:0"
+                        "src": "11627:11:0"
                       }
                     ]
                   }
@@ -12624,7 +12529,7 @@
               ]
             },
             "documentation": null,
-            "id": 976,
+            "id": 970,
             "implemented": true,
             "isConstructor": false,
             "isDeclaredConst": false,
@@ -12674,7 +12579,7 @@
                   "id": 917,
                   "name": "_h",
                   "nodeType": "VariableDeclaration",
-                  "scope": 976,
+                  "scope": 970,
                   "src": "11362:10:0",
                   "stateVariable": false,
                   "storageLocation": "default",
@@ -12708,7 +12613,7 @@
                   "id": 923,
                   "name": "",
                   "nodeType": "VariableDeclaration",
-                  "scope": 976,
+                  "scope": 970,
                   "src": "11402:4:0",
                   "stateVariable": false,
                   "storageLocation": "default",
@@ -12732,30 +12637,30 @@
               ],
               "src": "11401:6:0"
             },
-            "scope": 1013,
-            "src": "11345:328:0",
+            "scope": 1007,
+            "src": "11345:310:0",
             "stateMutability": "nonpayable",
             "superFunction": 791,
             "visibility": "public"
           },
           {
             "body": {
-              "id": 1007,
+              "id": 1001,
               "nodeType": "Block",
-              "src": "11745:169:0",
+              "src": "11727:169:0",
               "statements": [
                 {
                   "assignments": [
-                    980
+                    974
                   ],
                   "declarations": [
                     {
                       "constant": false,
-                      "id": 980,
+                      "id": 974,
                       "name": "length",
                       "nodeType": "VariableDeclaration",
-                      "scope": 1008,
-                      "src": "11755:11:0",
+                      "scope": 1002,
+                      "src": "11737:11:0",
                       "stateVariable": false,
                       "storageLocation": "default",
                       "typeDescriptions": {
@@ -12763,10 +12668,10 @@
                         "typeString": "uint256"
                       },
                       "typeName": {
-                        "id": 979,
+                        "id": 973,
                         "name": "uint",
                         "nodeType": "ElementaryTypeName",
-                        "src": "11755:4:0",
+                        "src": "11737:4:0",
                         "typeDescriptions": {
                           "typeIdentifier": "t_uint256",
                           "typeString": "uint256"
@@ -12776,23 +12681,23 @@
                       "visibility": "internal"
                     }
                   ],
-                  "id": 983,
+                  "id": 977,
                   "initialValue": {
                     "argumentTypes": null,
                     "expression": {
                       "argumentTypes": null,
-                      "id": 981,
+                      "id": 975,
                       "name": "m_pendingIndex",
                       "nodeType": "Identifier",
                       "overloadedDeclarations": [],
                       "referencedDeclaration": 725,
-                      "src": "11769:14:0",
+                      "src": "11751:14:0",
                       "typeDescriptions": {
                         "typeIdentifier": "t_array$_t_bytes32_$dyn_storage",
                         "typeString": "bytes32[] storage ref"
                       }
                     },
-                    "id": 982,
+                    "id": 976,
                     "isConstant": false,
                     "isLValue": true,
                     "isPure": false,
@@ -12800,20 +12705,20 @@
                     "memberName": "length",
                     "nodeType": "MemberAccess",
                     "referencedDeclaration": null,
-                    "src": "11769:21:0",
+                    "src": "11751:21:0",
                     "typeDescriptions": {
                       "typeIdentifier": "t_uint256",
                       "typeString": "uint256"
                     }
                   },
                   "nodeType": "VariableDeclarationStatement",
-                  "src": "11755:35:0"
+                  "src": "11737:35:0"
                 },
                 {
                   "body": {
                     "expression": {
                       "argumentTypes": null,
-                      "id": 999,
+                      "id": 993,
                       "isConstant": false,
                       "isLValue": false,
                       "isPure": false,
@@ -12821,47 +12726,47 @@
                       "nodeType": "UnaryOperation",
                       "operator": "delete",
                       "prefix": true,
-                      "src": "11846:31:0",
+                      "src": "11828:31:0",
                       "subExpression": {
                         "argumentTypes": null,
                         "baseExpression": {
                           "argumentTypes": null,
-                          "id": 994,
+                          "id": 988,
                           "name": "m_txs",
                           "nodeType": "Identifier",
                           "overloadedDeclarations": [],
-                          "referencedDeclaration": 1012,
-                          "src": "11853:5:0",
+                          "referencedDeclaration": 1006,
+                          "src": "11835:5:0",
                           "typeDescriptions": {
                             "typeIdentifier": "t_mapping$_t_bytes32_$_t_struct$_Transaction_$806_storage_$",
                             "typeString": "mapping(bytes32 => struct wallet.Transaction storage ref)"
                           }
                         },
-                        "id": 998,
+                        "id": 992,
                         "indexExpression": {
                           "argumentTypes": null,
                           "baseExpression": {
                             "argumentTypes": null,
-                            "id": 995,
+                            "id": 989,
                             "name": "m_pendingIndex",
                             "nodeType": "Identifier",
                             "overloadedDeclarations": [],
                             "referencedDeclaration": 725,
-                            "src": "11859:14:0",
+                            "src": "11841:14:0",
                             "typeDescriptions": {
                               "typeIdentifier": "t_array$_t_bytes32_$dyn_storage",
                               "typeString": "bytes32[] storage ref"
                             }
                           },
-                          "id": 997,
+                          "id": 991,
                           "indexExpression": {
                             "argumentTypes": null,
-                            "id": 996,
+                            "id": 990,
                             "name": "i",
                             "nodeType": "Identifier",
                             "overloadedDeclarations": [],
-                            "referencedDeclaration": 985,
-                            "src": "11874:1:0",
+                            "referencedDeclaration": 979,
+                            "src": "11856:1:0",
                             "typeDescriptions": {
                               "typeIdentifier": "t_uint256",
                               "typeString": "uint256"
@@ -12872,7 +12777,7 @@
                           "isPure": false,
                           "lValueRequested": false,
                           "nodeType": "IndexAccess",
-                          "src": "11859:17:0",
+                          "src": "11841:17:0",
                           "typeDescriptions": {
                             "typeIdentifier": "t_bytes32",
                             "typeString": "bytes32"
@@ -12883,7 +12788,7 @@
                         "isPure": false,
                         "lValueRequested": true,
                         "nodeType": "IndexAccess",
-                        "src": "11853:24:0",
+                        "src": "11835:24:0",
                         "typeDescriptions": {
                           "typeIdentifier": "t_struct$_Transaction_$806_storage",
                           "typeString": "struct wallet.Transaction storage ref"
@@ -12894,9 +12799,9 @@
                         "typeString": "tuple()"
                       }
                     },
-                    "id": 1000,
+                    "id": 994,
                     "nodeType": "ExpressionStatement",
-                    "src": "11846:31:0"
+                    "src": "11828:31:0"
                   },
                   "condition": {
                     "argumentTypes": null,
@@ -12904,19 +12809,19 @@
                       "typeIdentifier": "t_uint256",
                       "typeString": "uint256"
                     },
-                    "id": 990,
+                    "id": 984,
                     "isConstant": false,
                     "isLValue": false,
                     "isPure": false,
                     "lValueRequested": false,
                     "leftExpression": {
                       "argumentTypes": null,
-                      "id": 988,
+                      "id": 982,
                       "name": "i",
                       "nodeType": "Identifier",
                       "overloadedDeclarations": [],
-                      "referencedDeclaration": 985,
-                      "src": "11817:1:0",
+                      "referencedDeclaration": 979,
+                      "src": "11799:1:0",
                       "typeDescriptions": {
                         "typeIdentifier": "t_uint256",
                         "typeString": "uint256"
@@ -12926,36 +12831,36 @@
                     "operator": "<",
                     "rightExpression": {
                       "argumentTypes": null,
-                      "id": 989,
+                      "id": 983,
                       "name": "length",
                       "nodeType": "Identifier",
                       "overloadedDeclarations": [],
-                      "referencedDeclaration": 980,
-                      "src": "11821:6:0",
+                      "referencedDeclaration": 974,
+                      "src": "11803:6:0",
                       "typeDescriptions": {
                         "typeIdentifier": "t_uint256",
                         "typeString": "uint256"
                       }
                     },
-                    "src": "11817:10:0",
+                    "src": "11799:10:0",
                     "typeDescriptions": {
                       "typeIdentifier": "t_bool",
                       "typeString": "bool"
                     }
                   },
-                  "id": 1001,
+                  "id": 995,
                   "initializationExpression": {
                     "assignments": [
-                      985
+                      979
                     ],
                     "declarations": [
                       {
                         "constant": false,
-                        "id": 985,
+                        "id": 979,
                         "name": "i",
                         "nodeType": "VariableDeclaration",
-                        "scope": 1008,
-                        "src": "11805:6:0",
+                        "scope": 1002,
+                        "src": "11787:6:0",
                         "stateVariable": false,
                         "storageLocation": "default",
                         "typeDescriptions": {
@@ -12963,10 +12868,10 @@
                           "typeString": "uint256"
                         },
                         "typeName": {
-                          "id": 984,
+                          "id": 978,
                           "name": "uint",
                           "nodeType": "ElementaryTypeName",
-                          "src": "11805:4:0",
+                          "src": "11787:4:0",
                           "typeDescriptions": {
                             "typeIdentifier": "t_uint256",
                             "typeString": "uint256"
@@ -12976,18 +12881,18 @@
                         "visibility": "internal"
                       }
                     ],
-                    "id": 987,
+                    "id": 981,
                     "initialValue": {
                       "argumentTypes": null,
                       "hexValue": "30",
-                      "id": 986,
+                      "id": 980,
                       "isConstant": false,
                       "isLValue": false,
                       "isPure": true,
                       "kind": "number",
                       "lValueRequested": false,
                       "nodeType": "Literal",
-                      "src": "11814:1:0",
+                      "src": "11796:1:0",
                       "subdenomination": null,
                       "typeDescriptions": {
                         "typeIdentifier": "t_rational_0_by_1",
@@ -12996,12 +12901,12 @@
                       "value": "0"
                     },
                     "nodeType": "VariableDeclarationStatement",
-                    "src": "11805:10:0"
+                    "src": "11787:10:0"
                   },
                   "loopExpression": {
                     "expression": {
                       "argumentTypes": null,
-                      "id": 992,
+                      "id": 986,
                       "isConstant": false,
                       "isLValue": false,
                       "isPure": false,
@@ -13009,15 +12914,15 @@
                       "nodeType": "UnaryOperation",
                       "operator": "++",
                       "prefix": true,
-                      "src": "11829:3:0",
+                      "src": "11811:3:0",
                       "subExpression": {
                         "argumentTypes": null,
-                        "id": 991,
+                        "id": 985,
                         "name": "i",
                         "nodeType": "Identifier",
                         "overloadedDeclarations": [],
-                        "referencedDeclaration": 985,
-                        "src": "11831:1:0",
+                        "referencedDeclaration": 979,
+                        "src": "11813:1:0",
                         "typeDescriptions": {
                           "typeIdentifier": "t_uint256",
                           "typeString": "uint256"
@@ -13028,12 +12933,12 @@
                         "typeString": "uint256"
                       }
                     },
-                    "id": 993,
+                    "id": 987,
                     "nodeType": "ExpressionStatement",
-                    "src": "11829:3:0"
+                    "src": "11811:3:0"
                   },
                   "nodeType": "ForStatement",
-                  "src": "11800:77:0"
+                  "src": "11782:77:0"
                 },
                 {
                   "expression": {
@@ -13043,18 +12948,18 @@
                       "argumentTypes": [],
                       "expression": {
                         "argumentTypes": null,
-                        "id": 1002,
+                        "id": 996,
                         "name": "super",
                         "nodeType": "Identifier",
                         "overloadedDeclarations": [],
-                        "referencedDeclaration": 1046,
-                        "src": "11887:5:0",
+                        "referencedDeclaration": 1040,
+                        "src": "11869:5:0",
                         "typeDescriptions": {
-                          "typeIdentifier": "t_super$_wallet_$1013",
+                          "typeIdentifier": "t_super$_wallet_$1007",
                           "typeString": "contract super wallet"
                         }
                       },
-                      "id": 1004,
+                      "id": 998,
                       "isConstant": false,
                       "isLValue": false,
                       "isPure": false,
@@ -13062,13 +12967,13 @@
                       "memberName": "clearPending",
                       "nodeType": "MemberAccess",
                       "referencedDeclaration": 703,
-                      "src": "11887:18:0",
+                      "src": "11869:18:0",
                       "typeDescriptions": {
                         "typeIdentifier": "t_function_internal_nonpayable$__$returns$__$",
                         "typeString": "function ()"
                       }
                     },
-                    "id": 1005,
+                    "id": 999,
                     "isConstant": false,
                     "isLValue": false,
                     "isPure": false,
@@ -13076,20 +12981,20 @@
                     "lValueRequested": false,
                     "names": [],
                     "nodeType": "FunctionCall",
-                    "src": "11887:20:0",
+                    "src": "11869:20:0",
                     "typeDescriptions": {
                       "typeIdentifier": "t_tuple$__$",
                       "typeString": "tuple()"
                     }
                   },
-                  "id": 1006,
+                  "id": 1000,
                   "nodeType": "ExpressionStatement",
-                  "src": "11887:20:0"
+                  "src": "11869:20:0"
                 }
               ]
             },
             "documentation": null,
-            "id": 1008,
+            "id": 1002,
             "implemented": true,
             "isConstructor": false,
             "isDeclaredConst": false,
@@ -13097,31 +13002,31 @@
             "name": "clearPending",
             "nodeType": "FunctionDefinition",
             "parameters": {
-              "id": 977,
+              "id": 971,
               "nodeType": "ParameterList",
               "parameters": [],
-              "src": "11733:2:0"
+              "src": "11715:2:0"
             },
             "payable": false,
             "returnParameters": {
-              "id": 978,
+              "id": 972,
               "nodeType": "ParameterList",
               "parameters": [],
-              "src": "11745:0:0"
+              "src": "11727:0:0"
             },
-            "scope": 1013,
-            "src": "11712:202:0",
+            "scope": 1007,
+            "src": "11694:202:0",
             "stateMutability": "nonpayable",
             "superFunction": 703,
             "visibility": "internal"
           },
           {
             "constant": false,
-            "id": 1012,
+            "id": 1006,
             "name": "m_txs",
             "nodeType": "VariableDeclaration",
-            "scope": 1013,
-            "src": "11983:38:0",
+            "scope": 1007,
+            "src": "11965:38:0",
             "stateVariable": true,
             "storageLocation": "default",
             "typeDescriptions": {
@@ -13129,30 +13034,30 @@
               "typeString": "mapping(bytes32 => struct wallet.Transaction)"
             },
             "typeName": {
-              "id": 1011,
+              "id": 1005,
               "keyType": {
-                "id": 1009,
+                "id": 1003,
                 "name": "bytes32",
                 "nodeType": "ElementaryTypeName",
-                "src": "11992:7:0",
+                "src": "11974:7:0",
                 "typeDescriptions": {
                   "typeIdentifier": "t_bytes32",
                   "typeString": "bytes32"
                 }
               },
               "nodeType": "Mapping",
-              "src": "11983:32:0",
+              "src": "11965:32:0",
               "typeDescriptions": {
                 "typeIdentifier": "t_mapping$_t_bytes32_$_t_struct$_Transaction_$806_storage_$",
                 "typeString": "mapping(bytes32 => struct wallet.Transaction)"
               },
               "valueType": {
                 "contractScope": null,
-                "id": 1010,
+                "id": 1004,
                 "name": "Transaction",
                 "nodeType": "UserDefinedTypeName",
                 "referencedDeclaration": 806,
-                "src": "12003:11:0",
+                "src": "11985:11:0",
                 "typeDescriptions": {
                   "typeIdentifier": "t_struct$_Transaction_$806_storage_ptr",
                   "typeString": "struct wallet.Transaction"
@@ -13163,11 +13068,11 @@
             "visibility": "internal"
           }
         ],
-        "scope": 1014,
-        "src": "9483:2541:0"
+        "scope": 1008,
+        "src": "9483:2523:0"
       }
     ],
-    "src": "523:11501:0"
+    "src": "523:11483:0"
   },
   "legacyAST": {
     "absolutePath": "/Users/yuzongkun/workspace/ETHContract/contracts/wallet.sol",
@@ -13179,10 +13084,10 @@
         792
       ],
       "wallet": [
-        1013
+        1007
       ]
     },
-    "id": 1014,
+    "id": 1008,
     "nodeType": "SourceUnit",
     "nodes": [
       {
@@ -13664,7 +13569,7 @@
                           "name": "msg",
                           "nodeType": "Identifier",
                           "overloadedDeclarations": [],
-                          "referencedDeclaration": 1028,
+                          "referencedDeclaration": 1022,
                           "src": "1437:3:0",
                           "typeDescriptions": {
                             "typeIdentifier": "t_magic_message",
@@ -14022,7 +13927,7 @@
                             "name": "msg",
                             "nodeType": "Identifier",
                             "overloadedDeclarations": [],
-                            "referencedDeclaration": 1028,
+                            "referencedDeclaration": 1022,
                             "src": "2104:3:0",
                             "typeDescriptions": {
                               "typeIdentifier": "t_magic_message",
@@ -14123,7 +14028,7 @@
                               "name": "msg",
                               "nodeType": "Identifier",
                               "overloadedDeclarations": [],
-                              "referencedDeclaration": 1028,
+                              "referencedDeclaration": 1022,
                               "src": "2143:3:0",
                               "typeDescriptions": {
                                 "typeIdentifier": "t_magic_message",
@@ -14935,7 +14840,7 @@
                             "name": "msg",
                             "nodeType": "Identifier",
                             "overloadedDeclarations": [],
-                            "referencedDeclaration": 1028,
+                            "referencedDeclaration": 1022,
                             "src": "2528:3:0",
                             "typeDescriptions": {
                               "typeIdentifier": "t_magic_message",
@@ -15453,7 +15358,7 @@
                                 "name": "msg",
                                 "nodeType": "Identifier",
                                 "overloadedDeclarations": [],
-                                "referencedDeclaration": 1028,
+                                "referencedDeclaration": 1022,
                                 "src": "2861:3:0",
                                 "typeDescriptions": {
                                   "typeIdentifier": "t_magic_message",
@@ -16297,7 +16202,7 @@
                           "name": "msg",
                           "nodeType": "Identifier",
                           "overloadedDeclarations": [],
-                          "referencedDeclaration": 1028,
+                          "referencedDeclaration": 1022,
                           "src": "3033:3:0",
                           "typeDescriptions": {
                             "typeIdentifier": "t_magic_message",
@@ -16330,7 +16235,7 @@
                       "name": "sha3",
                       "nodeType": "Identifier",
                       "overloadedDeclarations": [],
-                      "referencedDeclaration": 1038,
+                      "referencedDeclaration": 1032,
                       "src": "3028:4:0",
                       "typeDescriptions": {
                         "typeIdentifier": "t_function_sha3_pure$__$returns$_t_bytes32_$",
@@ -17022,7 +16927,7 @@
                           "name": "msg",
                           "nodeType": "Identifier",
                           "overloadedDeclarations": [],
-                          "referencedDeclaration": 1028,
+                          "referencedDeclaration": 1022,
                           "src": "3434:3:0",
                           "typeDescriptions": {
                             "typeIdentifier": "t_magic_message",
@@ -17055,7 +16960,7 @@
                       "name": "sha3",
                       "nodeType": "Identifier",
                       "overloadedDeclarations": [],
-                      "referencedDeclaration": 1038,
+                      "referencedDeclaration": 1032,
                       "src": "3429:4:0",
                       "typeDescriptions": {
                         "typeIdentifier": "t_function_sha3_pure$__$returns$_t_bytes32_$",
@@ -17760,7 +17665,7 @@
                           "name": "msg",
                           "nodeType": "Identifier",
                           "overloadedDeclarations": [],
-                          "referencedDeclaration": 1028,
+                          "referencedDeclaration": 1022,
                           "src": "3869:3:0",
                           "typeDescriptions": {
                             "typeIdentifier": "t_magic_message",
@@ -17793,7 +17698,7 @@
                       "name": "sha3",
                       "nodeType": "Identifier",
                       "overloadedDeclarations": [],
-                      "referencedDeclaration": 1038,
+                      "referencedDeclaration": 1032,
                       "src": "3864:4:0",
                       "typeDescriptions": {
                         "typeIdentifier": "t_function_sha3_pure$__$returns$_t_bytes32_$",
@@ -18101,7 +18006,7 @@
                           "name": "msg",
                           "nodeType": "Identifier",
                           "overloadedDeclarations": [],
-                          "referencedDeclaration": 1028,
+                          "referencedDeclaration": 1022,
                           "src": "4369:3:0",
                           "typeDescriptions": {
                             "typeIdentifier": "t_magic_message",
@@ -18134,7 +18039,7 @@
                       "name": "sha3",
                       "nodeType": "Identifier",
                       "overloadedDeclarations": [],
-                      "referencedDeclaration": 1038,
+                      "referencedDeclaration": 1032,
                       "src": "4364:4:0",
                       "typeDescriptions": {
                         "typeIdentifier": "t_function_sha3_pure$__$returns$_t_bytes32_$",
@@ -19125,7 +19030,7 @@
                             "name": "msg",
                             "nodeType": "Identifier",
                             "overloadedDeclarations": [],
-                            "referencedDeclaration": 1028,
+                            "referencedDeclaration": 1022,
                             "src": "5370:3:0",
                             "typeDescriptions": {
                               "typeIdentifier": "t_magic_message",
@@ -19671,7 +19576,7 @@
                               "name": "block",
                               "nodeType": "Identifier",
                               "overloadedDeclarations": [],
-                              "referencedDeclaration": 1018,
+                              "referencedDeclaration": 1012,
                               "src": "5937:5:0",
                               "typeDescriptions": {
                                 "typeIdentifier": "t_magic_block",
@@ -19814,7 +19719,7 @@
                         "name": "block",
                         "nodeType": "Identifier",
                         "overloadedDeclarations": [],
-                        "referencedDeclaration": 1018,
+                        "referencedDeclaration": 1012,
                         "src": "6031:5:0",
                         "typeDescriptions": {
                           "typeIdentifier": "t_magic_block",
@@ -20151,7 +20056,7 @@
                                 "name": "msg",
                                 "nodeType": "Identifier",
                                 "overloadedDeclarations": [],
-                                "referencedDeclaration": 1028,
+                                "referencedDeclaration": 1022,
                                 "src": "6379:3:0",
                                 "typeDescriptions": {
                                   "typeIdentifier": "t_magic_message",
@@ -22484,7 +22389,7 @@
             "visibility": "internal"
           }
         ],
-        "scope": 1014,
+        "scope": 1008,
         "src": "523:7769:0"
       },
       {
@@ -23293,7 +23198,7 @@
             "visibility": "public"
           }
         ],
-        "scope": 1014,
+        "scope": 1008,
         "src": "8367:993:0"
       },
       {
@@ -23342,9 +23247,9 @@
         "contractKind": "contract",
         "documentation": null,
         "fullyImplemented": true,
-        "id": 1013,
+        "id": 1007,
         "linearizedBaseContracts": [
-          1013,
+          1007,
           726,
           792
         ],
@@ -23356,7 +23261,7 @@
             "id": 799,
             "name": "version",
             "nodeType": "VariableDeclaration",
-            "scope": 1013,
+            "scope": 1007,
             "src": "9530:23:0",
             "stateVariable": true,
             "storageLocation": "default",
@@ -23479,7 +23384,7 @@
             ],
             "name": "Transaction",
             "nodeType": "StructDefinition",
-            "scope": 1013,
+            "scope": 1007,
             "src": "9678:86:0",
             "visibility": "public"
           },
@@ -23621,7 +23526,7 @@
               "parameters": [],
               "src": "9981:0:0"
             },
-            "scope": 1013,
+            "scope": 1007,
             "src": "9887:101:0",
             "stateMutability": "nonpayable",
             "superFunction": null,
@@ -23662,7 +23567,7 @@
                       "name": "suicide",
                       "nodeType": "Identifier",
                       "overloadedDeclarations": [],
-                      "referencedDeclaration": 1039,
+                      "referencedDeclaration": 1033,
                       "src": "10130:7:0",
                       "typeDescriptions": {
                         "typeIdentifier": "t_function_selfdestruct_nonpayable$_t_address_$returns$__$",
@@ -23708,7 +23613,7 @@
                           "name": "msg",
                           "nodeType": "Identifier",
                           "overloadedDeclarations": [],
-                          "referencedDeclaration": 1028,
+                          "referencedDeclaration": 1022,
                           "src": "10100:3:0",
                           "typeDescriptions": {
                             "typeIdentifier": "t_magic_message",
@@ -23741,7 +23646,7 @@
                       "name": "sha3",
                       "nodeType": "Identifier",
                       "overloadedDeclarations": [],
-                      "referencedDeclaration": 1038,
+                      "referencedDeclaration": 1032,
                       "src": "10095:4:0",
                       "typeDescriptions": {
                         "typeIdentifier": "t_function_sha3_pure$__$returns$_t_bytes32_$",
@@ -23823,7 +23728,7 @@
               "parameters": [],
               "src": "10120:0:0"
             },
-            "scope": 1013,
+            "scope": 1007,
             "src": "10053:96:0",
             "stateMutability": "nonpayable",
             "superFunction": null,
@@ -23855,7 +23760,7 @@
                         "name": "msg",
                         "nodeType": "Identifier",
                         "overloadedDeclarations": [],
-                        "referencedDeclaration": 1028,
+                        "referencedDeclaration": 1022,
                         "src": "10280:3:0",
                         "typeDescriptions": {
                           "typeIdentifier": "t_magic_message",
@@ -23918,7 +23823,7 @@
                             "name": "msg",
                             "nodeType": "Identifier",
                             "overloadedDeclarations": [],
-                            "referencedDeclaration": 1028,
+                            "referencedDeclaration": 1022,
                             "src": "10315:3:0",
                             "typeDescriptions": {
                               "typeIdentifier": "t_magic_message",
@@ -23947,7 +23852,7 @@
                             "name": "msg",
                             "nodeType": "Identifier",
                             "overloadedDeclarations": [],
-                            "referencedDeclaration": 1028,
+                            "referencedDeclaration": 1022,
                             "src": "10327:3:0",
                             "typeDescriptions": {
                               "typeIdentifier": "t_magic_message",
@@ -24033,7 +23938,7 @@
               "parameters": [],
               "src": "10228:0:0"
             },
-            "scope": 1013,
+            "scope": 1007,
             "src": "10209:135:0",
             "stateMutability": "payable",
             "superFunction": null,
@@ -24079,7 +23984,7 @@
                             "name": "msg",
                             "nodeType": "Identifier",
                             "overloadedDeclarations": [],
-                            "referencedDeclaration": 1028,
+                            "referencedDeclaration": 1022,
                             "src": "10908:3:0",
                             "typeDescriptions": {
                               "typeIdentifier": "t_magic_message",
@@ -24112,7 +24017,7 @@
                         "name": "sha3",
                         "nodeType": "Identifier",
                         "overloadedDeclarations": [],
-                        "referencedDeclaration": 1038,
+                        "referencedDeclaration": 1032,
                         "src": "10903:4:0",
                         "typeDescriptions": {
                           "typeIdentifier": "t_function_sha3_pure$__$returns$_t_bytes32_$",
@@ -24194,9 +24099,9 @@
                           "name": "confirm",
                           "nodeType": "Identifier",
                           "overloadedDeclarations": [
-                            976
+                            970
                           ],
-                          "referencedDeclaration": 976,
+                          "referencedDeclaration": 970,
                           "src": "10932:7:0",
                           "typeDescriptions": {
                             "typeIdentifier": "t_function_internal_nonpayable$_t_bytes32_$returns$_t_bool_$",
@@ -24245,7 +24150,7 @@
                             "name": "m_txs",
                             "nodeType": "Identifier",
                             "overloadedDeclarations": [],
-                            "referencedDeclaration": 1012,
+                            "referencedDeclaration": 1006,
                             "src": "10947:5:0",
                             "typeDescriptions": {
                               "typeIdentifier": "t_mapping$_t_bytes32_$_t_struct$_Transaction_$806_storage_$",
@@ -24350,7 +24255,7 @@
                                 "name": "m_txs",
                                 "nodeType": "Identifier",
                                 "overloadedDeclarations": [],
-                                "referencedDeclaration": 1012,
+                                "referencedDeclaration": 1006,
                                 "src": "10980:5:0",
                                 "typeDescriptions": {
                                   "typeIdentifier": "t_mapping$_t_bytes32_$_t_struct$_Transaction_$806_storage_$",
@@ -24439,7 +24344,7 @@
                                 "name": "m_txs",
                                 "nodeType": "Identifier",
                                 "overloadedDeclarations": [],
-                                "referencedDeclaration": 1012,
+                                "referencedDeclaration": 1006,
                                 "src": "11012:5:0",
                                 "typeDescriptions": {
                                   "typeIdentifier": "t_mapping$_t_bytes32_$_t_struct$_Transaction_$806_storage_$",
@@ -24528,7 +24433,7 @@
                                 "name": "m_txs",
                                 "nodeType": "Identifier",
                                 "overloadedDeclarations": [],
-                                "referencedDeclaration": 1012,
+                                "referencedDeclaration": 1006,
                                 "src": "11050:5:0",
                                 "typeDescriptions": {
                                   "typeIdentifier": "t_mapping$_t_bytes32_$_t_struct$_Transaction_$806_storage_$",
@@ -24624,7 +24529,7 @@
                                 "name": "msg",
                                 "nodeType": "Identifier",
                                 "overloadedDeclarations": [],
-                                "referencedDeclaration": 1028,
+                                "referencedDeclaration": 1022,
                                 "src": "11109:3:0",
                                 "typeDescriptions": {
                                   "typeIdentifier": "t_magic_message",
@@ -24889,7 +24794,7 @@
               ],
               "src": "10833:12:0"
             },
-            "scope": 1013,
+            "scope": 1007,
             "src": "10750:407:0",
             "stateMutability": "nonpayable",
             "superFunction": 784,
@@ -24897,9 +24802,9 @@
           },
           {
             "body": {
-              "id": 975,
+              "id": 969,
               "nodeType": "Block",
-              "src": "11408:265:0",
+              "src": "11408:247:0",
               "statements": [
                 {
                   "condition": {
@@ -24923,7 +24828,7 @@
                           "name": "m_txs",
                           "nodeType": "Identifier",
                           "overloadedDeclarations": [],
-                          "referencedDeclaration": 1012,
+                          "referencedDeclaration": 1006,
                           "src": "11422:5:0",
                           "typeDescriptions": {
                             "typeIdentifier": "t_mapping$_t_bytes32_$_t_struct$_Transaction_$806_storage_$",
@@ -24996,13 +24901,13 @@
                     }
                   },
                   "falseBody": null,
-                  "id": 974,
+                  "id": 968,
                   "nodeType": "IfStatement",
-                  "src": "11418:249:0",
+                  "src": "11418:231:0",
                   "trueBody": {
-                    "id": 973,
+                    "id": 967,
                     "nodeType": "Block",
-                    "src": "11441:226:0",
+                    "src": "11441:208:0",
                     "statements": [
                       {
                         "expression": {
@@ -25014,26 +24919,26 @@
                                 "argumentTypes": null,
                                 "baseExpression": {
                                   "argumentTypes": null,
-                                  "id": 942,
+                                  "id": 936,
                                   "name": "m_txs",
                                   "nodeType": "Identifier",
                                   "overloadedDeclarations": [],
-                                  "referencedDeclaration": 1012,
-                                  "src": "11496:5:0",
+                                  "referencedDeclaration": 1006,
+                                  "src": "11477:5:0",
                                   "typeDescriptions": {
                                     "typeIdentifier": "t_mapping$_t_bytes32_$_t_struct$_Transaction_$806_storage_$",
                                     "typeString": "mapping(bytes32 => struct wallet.Transaction storage ref)"
                                   }
                                 },
-                                "id": 944,
+                                "id": 938,
                                 "indexExpression": {
                                   "argumentTypes": null,
-                                  "id": 943,
+                                  "id": 937,
                                   "name": "_h",
                                   "nodeType": "Identifier",
                                   "overloadedDeclarations": [],
                                   "referencedDeclaration": 917,
-                                  "src": "11502:2:0",
+                                  "src": "11483:2:0",
                                   "typeDescriptions": {
                                     "typeIdentifier": "t_bytes32",
                                     "typeString": "bytes32"
@@ -25044,200 +24949,105 @@
                                 "isPure": false,
                                 "lValueRequested": false,
                                 "nodeType": "IndexAccess",
-                                "src": "11496:9:0",
+                                "src": "11477:9:0",
                                 "typeDescriptions": {
                                   "typeIdentifier": "t_struct$_Transaction_$806_storage",
                                   "typeString": "struct wallet.Transaction storage ref"
                                 }
                               },
-                              "id": 945,
+                              "id": 939,
                               "isConstant": false,
                               "isLValue": true,
                               "isPure": false,
                               "lValueRequested": false,
-                              "memberName": "data",
+                              "memberName": "value",
                               "nodeType": "MemberAccess",
-                              "referencedDeclaration": 805,
-                              "src": "11496:14:0",
+                              "referencedDeclaration": 803,
+                              "src": "11477:15:0",
                               "typeDescriptions": {
-                                "typeIdentifier": "t_bytes_storage",
-                                "typeString": "bytes storage ref"
+                                "typeIdentifier": "t_uint256",
+                                "typeString": "uint256"
                               }
                             }
                           ],
                           "expression": {
                             "argumentTypes": [
                               {
-                                "typeIdentifier": "t_bytes_storage",
-                                "typeString": "bytes storage ref"
+                                "typeIdentifier": "t_uint256",
+                                "typeString": "uint256"
                               }
                             ],
-                            "arguments": [
-                              {
+                            "expression": {
+                              "argumentTypes": null,
+                              "expression": {
                                 "argumentTypes": null,
-                                "expression": {
+                                "baseExpression": {
                                   "argumentTypes": null,
-                                  "baseExpression": {
-                                    "argumentTypes": null,
-                                    "id": 937,
-                                    "name": "m_txs",
-                                    "nodeType": "Identifier",
-                                    "overloadedDeclarations": [],
-                                    "referencedDeclaration": 1012,
-                                    "src": "11479:5:0",
-                                    "typeDescriptions": {
-                                      "typeIdentifier": "t_mapping$_t_bytes32_$_t_struct$_Transaction_$806_storage_$",
-                                      "typeString": "mapping(bytes32 => struct wallet.Transaction storage ref)"
-                                    }
-                                  },
-                                  "id": 939,
-                                  "indexExpression": {
-                                    "argumentTypes": null,
-                                    "id": 938,
-                                    "name": "_h",
-                                    "nodeType": "Identifier",
-                                    "overloadedDeclarations": [],
-                                    "referencedDeclaration": 917,
-                                    "src": "11485:2:0",
-                                    "typeDescriptions": {
-                                      "typeIdentifier": "t_bytes32",
-                                      "typeString": "bytes32"
-                                    }
-                                  },
-                                  "isConstant": false,
-                                  "isLValue": true,
-                                  "isPure": false,
-                                  "lValueRequested": false,
-                                  "nodeType": "IndexAccess",
-                                  "src": "11479:9:0",
+                                  "id": 931,
+                                  "name": "m_txs",
+                                  "nodeType": "Identifier",
+                                  "overloadedDeclarations": [],
+                                  "referencedDeclaration": 1006,
+                                  "src": "11455:5:0",
                                   "typeDescriptions": {
-                                    "typeIdentifier": "t_struct$_Transaction_$806_storage",
-                                    "typeString": "struct wallet.Transaction storage ref"
+                                    "typeIdentifier": "t_mapping$_t_bytes32_$_t_struct$_Transaction_$806_storage_$",
+                                    "typeString": "mapping(bytes32 => struct wallet.Transaction storage ref)"
                                   }
                                 },
-                                "id": 940,
+                                "id": 933,
+                                "indexExpression": {
+                                  "argumentTypes": null,
+                                  "id": 932,
+                                  "name": "_h",
+                                  "nodeType": "Identifier",
+                                  "overloadedDeclarations": [],
+                                  "referencedDeclaration": 917,
+                                  "src": "11461:2:0",
+                                  "typeDescriptions": {
+                                    "typeIdentifier": "t_bytes32",
+                                    "typeString": "bytes32"
+                                  }
+                                },
                                 "isConstant": false,
                                 "isLValue": true,
                                 "isPure": false,
                                 "lValueRequested": false,
-                                "memberName": "value",
-                                "nodeType": "MemberAccess",
-                                "referencedDeclaration": 803,
-                                "src": "11479:15:0",
+                                "nodeType": "IndexAccess",
+                                "src": "11455:9:0",
                                 "typeDescriptions": {
-                                  "typeIdentifier": "t_uint256",
-                                  "typeString": "uint256"
-                                }
-                              }
-                            ],
-                            "expression": {
-                              "argumentTypes": [
-                                {
-                                  "typeIdentifier": "t_uint256",
-                                  "typeString": "uint256"
-                                }
-                              ],
-                              "expression": {
-                                "argumentTypes": null,
-                                "expression": {
-                                  "argumentTypes": null,
-                                  "expression": {
-                                    "argumentTypes": null,
-                                    "baseExpression": {
-                                      "argumentTypes": null,
-                                      "id": 931,
-                                      "name": "m_txs",
-                                      "nodeType": "Identifier",
-                                      "overloadedDeclarations": [],
-                                      "referencedDeclaration": 1012,
-                                      "src": "11455:5:0",
-                                      "typeDescriptions": {
-                                        "typeIdentifier": "t_mapping$_t_bytes32_$_t_struct$_Transaction_$806_storage_$",
-                                        "typeString": "mapping(bytes32 => struct wallet.Transaction storage ref)"
-                                      }
-                                    },
-                                    "id": 933,
-                                    "indexExpression": {
-                                      "argumentTypes": null,
-                                      "id": 932,
-                                      "name": "_h",
-                                      "nodeType": "Identifier",
-                                      "overloadedDeclarations": [],
-                                      "referencedDeclaration": 917,
-                                      "src": "11461:2:0",
-                                      "typeDescriptions": {
-                                        "typeIdentifier": "t_bytes32",
-                                        "typeString": "bytes32"
-                                      }
-                                    },
-                                    "isConstant": false,
-                                    "isLValue": true,
-                                    "isPure": false,
-                                    "lValueRequested": false,
-                                    "nodeType": "IndexAccess",
-                                    "src": "11455:9:0",
-                                    "typeDescriptions": {
-                                      "typeIdentifier": "t_struct$_Transaction_$806_storage",
-                                      "typeString": "struct wallet.Transaction storage ref"
-                                    }
-                                  },
-                                  "id": 934,
-                                  "isConstant": false,
-                                  "isLValue": true,
-                                  "isPure": false,
-                                  "lValueRequested": false,
-                                  "memberName": "to",
-                                  "nodeType": "MemberAccess",
-                                  "referencedDeclaration": 801,
-                                  "src": "11455:12:0",
-                                  "typeDescriptions": {
-                                    "typeIdentifier": "t_address",
-                                    "typeString": "address"
-                                  }
-                                },
-                                "id": 935,
-                                "isConstant": false,
-                                "isLValue": false,
-                                "isPure": false,
-                                "lValueRequested": false,
-                                "memberName": "call",
-                                "nodeType": "MemberAccess",
-                                "referencedDeclaration": null,
-                                "src": "11455:17:0",
-                                "typeDescriptions": {
-                                  "typeIdentifier": "t_function_barecall_payable$__$returns$_t_bool_$",
-                                  "typeString": "function () payable returns (bool)"
+                                  "typeIdentifier": "t_struct$_Transaction_$806_storage",
+                                  "typeString": "struct wallet.Transaction storage ref"
                                 }
                               },
-                              "id": 936,
+                              "id": 934,
                               "isConstant": false,
-                              "isLValue": false,
+                              "isLValue": true,
                               "isPure": false,
                               "lValueRequested": false,
-                              "memberName": "value",
+                              "memberName": "to",
                               "nodeType": "MemberAccess",
-                              "referencedDeclaration": null,
-                              "src": "11455:23:0",
+                              "referencedDeclaration": 801,
+                              "src": "11455:12:0",
                               "typeDescriptions": {
-                                "typeIdentifier": "t_function_setvalue_nonpayable$_t_uint256_$returns$_t_function_barecall_payable$__$returns$_t_bool_$value_$",
-                                "typeString": "function (uint256) returns (function () payable returns (bool))"
+                                "typeIdentifier": "t_address",
+                                "typeString": "address"
                               }
                             },
-                            "id": 941,
+                            "id": 935,
                             "isConstant": false,
                             "isLValue": false,
                             "isPure": false,
-                            "kind": "functionCall",
                             "lValueRequested": false,
-                            "names": [],
-                            "nodeType": "FunctionCall",
-                            "src": "11455:40:0",
+                            "memberName": "transfer",
+                            "nodeType": "MemberAccess",
+                            "referencedDeclaration": null,
+                            "src": "11455:21:0",
                             "typeDescriptions": {
-                              "typeIdentifier": "t_function_barecall_payable$__$returns$_t_bool_$value",
-                              "typeString": "function () payable returns (bool)"
+                              "typeIdentifier": "t_function_transfer_nonpayable$_t_uint256_$returns$__$",
+                              "typeString": "function (uint256)"
                             }
                           },
-                          "id": 946,
+                          "id": 940,
                           "isConstant": false,
                           "isLValue": false,
                           "isPure": false,
@@ -25245,15 +25055,15 @@
                           "lValueRequested": false,
                           "names": [],
                           "nodeType": "FunctionCall",
-                          "src": "11455:56:0",
+                          "src": "11455:38:0",
                           "typeDescriptions": {
-                            "typeIdentifier": "t_bool",
-                            "typeString": "bool"
+                            "typeIdentifier": "t_tuple$__$",
+                            "typeString": "tuple()"
                           }
                         },
-                        "id": 947,
+                        "id": 941,
                         "nodeType": "ExpressionStatement",
-                        "src": "11455:56:0"
+                        "src": "11455:38:0"
                       },
                       {
                         "expression": {
@@ -25263,18 +25073,18 @@
                               "argumentTypes": null,
                               "expression": {
                                 "argumentTypes": null,
-                                "id": 949,
+                                "id": 943,
                                 "name": "msg",
                                 "nodeType": "Identifier",
                                 "overloadedDeclarations": [],
-                                "referencedDeclaration": 1028,
-                                "src": "11539:3:0",
+                                "referencedDeclaration": 1022,
+                                "src": "11521:3:0",
                                 "typeDescriptions": {
                                   "typeIdentifier": "t_magic_message",
                                   "typeString": "msg"
                                 }
                               },
-                              "id": 950,
+                              "id": 944,
                               "isConstant": false,
                               "isLValue": false,
                               "isPure": false,
@@ -25282,7 +25092,7 @@
                               "memberName": "sender",
                               "nodeType": "MemberAccess",
                               "referencedDeclaration": null,
-                              "src": "11539:10:0",
+                              "src": "11521:10:0",
                               "typeDescriptions": {
                                 "typeIdentifier": "t_address",
                                 "typeString": "address"
@@ -25290,12 +25100,12 @@
                             },
                             {
                               "argumentTypes": null,
-                              "id": 951,
+                              "id": 945,
                               "name": "_h",
                               "nodeType": "Identifier",
                               "overloadedDeclarations": [],
                               "referencedDeclaration": 917,
-                              "src": "11551:2:0",
+                              "src": "11533:2:0",
                               "typeDescriptions": {
                                 "typeIdentifier": "t_bytes32",
                                 "typeString": "bytes32"
@@ -25307,26 +25117,26 @@
                                 "argumentTypes": null,
                                 "baseExpression": {
                                   "argumentTypes": null,
-                                  "id": 952,
+                                  "id": 946,
                                   "name": "m_txs",
                                   "nodeType": "Identifier",
                                   "overloadedDeclarations": [],
-                                  "referencedDeclaration": 1012,
-                                  "src": "11555:5:0",
+                                  "referencedDeclaration": 1006,
+                                  "src": "11537:5:0",
                                   "typeDescriptions": {
                                     "typeIdentifier": "t_mapping$_t_bytes32_$_t_struct$_Transaction_$806_storage_$",
                                     "typeString": "mapping(bytes32 => struct wallet.Transaction storage ref)"
                                   }
                                 },
-                                "id": 954,
+                                "id": 948,
                                 "indexExpression": {
                                   "argumentTypes": null,
-                                  "id": 953,
+                                  "id": 947,
                                   "name": "_h",
                                   "nodeType": "Identifier",
                                   "overloadedDeclarations": [],
                                   "referencedDeclaration": 917,
-                                  "src": "11561:2:0",
+                                  "src": "11543:2:0",
                                   "typeDescriptions": {
                                     "typeIdentifier": "t_bytes32",
                                     "typeString": "bytes32"
@@ -25337,13 +25147,13 @@
                                 "isPure": false,
                                 "lValueRequested": false,
                                 "nodeType": "IndexAccess",
-                                "src": "11555:9:0",
+                                "src": "11537:9:0",
                                 "typeDescriptions": {
                                   "typeIdentifier": "t_struct$_Transaction_$806_storage",
                                   "typeString": "struct wallet.Transaction storage ref"
                                 }
                               },
-                              "id": 955,
+                              "id": 949,
                               "isConstant": false,
                               "isLValue": true,
                               "isPure": false,
@@ -25351,7 +25161,7 @@
                               "memberName": "value",
                               "nodeType": "MemberAccess",
                               "referencedDeclaration": 803,
-                              "src": "11555:15:0",
+                              "src": "11537:15:0",
                               "typeDescriptions": {
                                 "typeIdentifier": "t_uint256",
                                 "typeString": "uint256"
@@ -25363,26 +25173,26 @@
                                 "argumentTypes": null,
                                 "baseExpression": {
                                   "argumentTypes": null,
-                                  "id": 956,
+                                  "id": 950,
                                   "name": "m_txs",
                                   "nodeType": "Identifier",
                                   "overloadedDeclarations": [],
-                                  "referencedDeclaration": 1012,
-                                  "src": "11572:5:0",
+                                  "referencedDeclaration": 1006,
+                                  "src": "11554:5:0",
                                   "typeDescriptions": {
                                     "typeIdentifier": "t_mapping$_t_bytes32_$_t_struct$_Transaction_$806_storage_$",
                                     "typeString": "mapping(bytes32 => struct wallet.Transaction storage ref)"
                                   }
                                 },
-                                "id": 958,
+                                "id": 952,
                                 "indexExpression": {
                                   "argumentTypes": null,
-                                  "id": 957,
+                                  "id": 951,
                                   "name": "_h",
                                   "nodeType": "Identifier",
                                   "overloadedDeclarations": [],
                                   "referencedDeclaration": 917,
-                                  "src": "11578:2:0",
+                                  "src": "11560:2:0",
                                   "typeDescriptions": {
                                     "typeIdentifier": "t_bytes32",
                                     "typeString": "bytes32"
@@ -25393,13 +25203,13 @@
                                 "isPure": false,
                                 "lValueRequested": false,
                                 "nodeType": "IndexAccess",
-                                "src": "11572:9:0",
+                                "src": "11554:9:0",
                                 "typeDescriptions": {
                                   "typeIdentifier": "t_struct$_Transaction_$806_storage",
                                   "typeString": "struct wallet.Transaction storage ref"
                                 }
                               },
-                              "id": 959,
+                              "id": 953,
                               "isConstant": false,
                               "isLValue": true,
                               "isPure": false,
@@ -25407,7 +25217,7 @@
                               "memberName": "to",
                               "nodeType": "MemberAccess",
                               "referencedDeclaration": 801,
-                              "src": "11572:12:0",
+                              "src": "11554:12:0",
                               "typeDescriptions": {
                                 "typeIdentifier": "t_address",
                                 "typeString": "address"
@@ -25419,26 +25229,26 @@
                                 "argumentTypes": null,
                                 "baseExpression": {
                                   "argumentTypes": null,
-                                  "id": 960,
+                                  "id": 954,
                                   "name": "m_txs",
                                   "nodeType": "Identifier",
                                   "overloadedDeclarations": [],
-                                  "referencedDeclaration": 1012,
-                                  "src": "11586:5:0",
+                                  "referencedDeclaration": 1006,
+                                  "src": "11568:5:0",
                                   "typeDescriptions": {
                                     "typeIdentifier": "t_mapping$_t_bytes32_$_t_struct$_Transaction_$806_storage_$",
                                     "typeString": "mapping(bytes32 => struct wallet.Transaction storage ref)"
                                   }
                                 },
-                                "id": 962,
+                                "id": 956,
                                 "indexExpression": {
                                   "argumentTypes": null,
-                                  "id": 961,
+                                  "id": 955,
                                   "name": "_h",
                                   "nodeType": "Identifier",
                                   "overloadedDeclarations": [],
                                   "referencedDeclaration": 917,
-                                  "src": "11592:2:0",
+                                  "src": "11574:2:0",
                                   "typeDescriptions": {
                                     "typeIdentifier": "t_bytes32",
                                     "typeString": "bytes32"
@@ -25449,13 +25259,13 @@
                                 "isPure": false,
                                 "lValueRequested": false,
                                 "nodeType": "IndexAccess",
-                                "src": "11586:9:0",
+                                "src": "11568:9:0",
                                 "typeDescriptions": {
                                   "typeIdentifier": "t_struct$_Transaction_$806_storage",
                                   "typeString": "struct wallet.Transaction storage ref"
                                 }
                               },
-                              "id": 963,
+                              "id": 957,
                               "isConstant": false,
                               "isLValue": true,
                               "isPure": false,
@@ -25463,7 +25273,7 @@
                               "memberName": "data",
                               "nodeType": "MemberAccess",
                               "referencedDeclaration": 805,
-                              "src": "11586:14:0",
+                              "src": "11568:14:0",
                               "typeDescriptions": {
                                 "typeIdentifier": "t_bytes_storage",
                                 "typeString": "bytes storage ref"
@@ -25493,18 +25303,18 @@
                                 "typeString": "bytes storage ref"
                               }
                             ],
-                            "id": 948,
+                            "id": 942,
                             "name": "MultiTransact",
                             "nodeType": "Identifier",
                             "overloadedDeclarations": [],
                             "referencedDeclaration": 754,
-                            "src": "11525:13:0",
+                            "src": "11507:13:0",
                             "typeDescriptions": {
                               "typeIdentifier": "t_function_event_nonpayable$_t_address_$_t_bytes32_$_t_uint256_$_t_address_$_t_bytes_memory_ptr_$returns$__$",
                               "typeString": "function (address,bytes32,uint256,address,bytes memory)"
                             }
                           },
-                          "id": 964,
+                          "id": 958,
                           "isConstant": false,
                           "isLValue": false,
                           "isPure": false,
@@ -25512,20 +25322,20 @@
                           "lValueRequested": false,
                           "names": [],
                           "nodeType": "FunctionCall",
-                          "src": "11525:76:0",
+                          "src": "11507:76:0",
                           "typeDescriptions": {
                             "typeIdentifier": "t_tuple$__$",
                             "typeString": "tuple()"
                           }
                         },
-                        "id": 965,
+                        "id": 959,
                         "nodeType": "ExpressionStatement",
-                        "src": "11525:76:0"
+                        "src": "11507:76:0"
                       },
                       {
                         "expression": {
                           "argumentTypes": null,
-                          "id": 969,
+                          "id": 963,
                           "isConstant": false,
                           "isLValue": false,
                           "isPure": false,
@@ -25533,31 +25343,31 @@
                           "nodeType": "UnaryOperation",
                           "operator": "delete",
                           "prefix": true,
-                          "src": "11615:16:0",
+                          "src": "11597:16:0",
                           "subExpression": {
                             "argumentTypes": null,
                             "baseExpression": {
                               "argumentTypes": null,
-                              "id": 966,
+                              "id": 960,
                               "name": "m_txs",
                               "nodeType": "Identifier",
                               "overloadedDeclarations": [],
-                              "referencedDeclaration": 1012,
-                              "src": "11622:5:0",
+                              "referencedDeclaration": 1006,
+                              "src": "11604:5:0",
                               "typeDescriptions": {
                                 "typeIdentifier": "t_mapping$_t_bytes32_$_t_struct$_Transaction_$806_storage_$",
                                 "typeString": "mapping(bytes32 => struct wallet.Transaction storage ref)"
                               }
                             },
-                            "id": 968,
+                            "id": 962,
                             "indexExpression": {
                               "argumentTypes": null,
-                              "id": 967,
+                              "id": 961,
                               "name": "_h",
                               "nodeType": "Identifier",
                               "overloadedDeclarations": [],
                               "referencedDeclaration": 917,
-                              "src": "11628:2:0",
+                              "src": "11610:2:0",
                               "typeDescriptions": {
                                 "typeIdentifier": "t_bytes32",
                                 "typeString": "bytes32"
@@ -25568,7 +25378,7 @@
                             "isPure": false,
                             "lValueRequested": true,
                             "nodeType": "IndexAccess",
-                            "src": "11622:9:0",
+                            "src": "11604:9:0",
                             "typeDescriptions": {
                               "typeIdentifier": "t_struct$_Transaction_$806_storage",
                               "typeString": "struct wallet.Transaction storage ref"
@@ -25579,22 +25389,22 @@
                             "typeString": "tuple()"
                           }
                         },
-                        "id": 970,
+                        "id": 964,
                         "nodeType": "ExpressionStatement",
-                        "src": "11615:16:0"
+                        "src": "11597:16:0"
                       },
                       {
                         "expression": {
                           "argumentTypes": null,
                           "hexValue": "74727565",
-                          "id": 971,
+                          "id": 965,
                           "isConstant": false,
                           "isLValue": false,
                           "isPure": true,
                           "kind": "bool",
                           "lValueRequested": false,
                           "nodeType": "Literal",
-                          "src": "11652:4:0",
+                          "src": "11634:4:0",
                           "subdenomination": null,
                           "typeDescriptions": {
                             "typeIdentifier": "t_bool",
@@ -25603,9 +25413,9 @@
                           "value": "true"
                         },
                         "functionReturnParameters": 924,
-                        "id": 972,
+                        "id": 966,
                         "nodeType": "Return",
-                        "src": "11645:11:0"
+                        "src": "11627:11:0"
                       }
                     ]
                   }
@@ -25613,7 +25423,7 @@
               ]
             },
             "documentation": null,
-            "id": 976,
+            "id": 970,
             "implemented": true,
             "isConstructor": false,
             "isDeclaredConst": false,
@@ -25663,7 +25473,7 @@
                   "id": 917,
                   "name": "_h",
                   "nodeType": "VariableDeclaration",
-                  "scope": 976,
+                  "scope": 970,
                   "src": "11362:10:0",
                   "stateVariable": false,
                   "storageLocation": "default",
@@ -25697,7 +25507,7 @@
                   "id": 923,
                   "name": "",
                   "nodeType": "VariableDeclaration",
-                  "scope": 976,
+                  "scope": 970,
                   "src": "11402:4:0",
                   "stateVariable": false,
                   "storageLocation": "default",
@@ -25721,30 +25531,30 @@
               ],
               "src": "11401:6:0"
             },
-            "scope": 1013,
-            "src": "11345:328:0",
+            "scope": 1007,
+            "src": "11345:310:0",
             "stateMutability": "nonpayable",
             "superFunction": 791,
             "visibility": "public"
           },
           {
             "body": {
-              "id": 1007,
+              "id": 1001,
               "nodeType": "Block",
-              "src": "11745:169:0",
+              "src": "11727:169:0",
               "statements": [
                 {
                   "assignments": [
-                    980
+                    974
                   ],
                   "declarations": [
                     {
                       "constant": false,
-                      "id": 980,
+                      "id": 974,
                       "name": "length",
                       "nodeType": "VariableDeclaration",
-                      "scope": 1008,
-                      "src": "11755:11:0",
+                      "scope": 1002,
+                      "src": "11737:11:0",
                       "stateVariable": false,
                       "storageLocation": "default",
                       "typeDescriptions": {
@@ -25752,10 +25562,10 @@
                         "typeString": "uint256"
                       },
                       "typeName": {
-                        "id": 979,
+                        "id": 973,
                         "name": "uint",
                         "nodeType": "ElementaryTypeName",
-                        "src": "11755:4:0",
+                        "src": "11737:4:0",
                         "typeDescriptions": {
                           "typeIdentifier": "t_uint256",
                           "typeString": "uint256"
@@ -25765,23 +25575,23 @@
                       "visibility": "internal"
                     }
                   ],
-                  "id": 983,
+                  "id": 977,
                   "initialValue": {
                     "argumentTypes": null,
                     "expression": {
                       "argumentTypes": null,
-                      "id": 981,
+                      "id": 975,
                       "name": "m_pendingIndex",
                       "nodeType": "Identifier",
                       "overloadedDeclarations": [],
                       "referencedDeclaration": 725,
-                      "src": "11769:14:0",
+                      "src": "11751:14:0",
                       "typeDescriptions": {
                         "typeIdentifier": "t_array$_t_bytes32_$dyn_storage",
                         "typeString": "bytes32[] storage ref"
                       }
                     },
-                    "id": 982,
+                    "id": 976,
                     "isConstant": false,
                     "isLValue": true,
                     "isPure": false,
@@ -25789,20 +25599,20 @@
                     "memberName": "length",
                     "nodeType": "MemberAccess",
                     "referencedDeclaration": null,
-                    "src": "11769:21:0",
+                    "src": "11751:21:0",
                     "typeDescriptions": {
                       "typeIdentifier": "t_uint256",
                       "typeString": "uint256"
                     }
                   },
                   "nodeType": "VariableDeclarationStatement",
-                  "src": "11755:35:0"
+                  "src": "11737:35:0"
                 },
                 {
                   "body": {
                     "expression": {
                       "argumentTypes": null,
-                      "id": 999,
+                      "id": 993,
                       "isConstant": false,
                       "isLValue": false,
                       "isPure": false,
@@ -25810,47 +25620,47 @@
                       "nodeType": "UnaryOperation",
                       "operator": "delete",
                       "prefix": true,
-                      "src": "11846:31:0",
+                      "src": "11828:31:0",
                       "subExpression": {
                         "argumentTypes": null,
                         "baseExpression": {
                           "argumentTypes": null,
-                          "id": 994,
+                          "id": 988,
                           "name": "m_txs",
                           "nodeType": "Identifier",
                           "overloadedDeclarations": [],
-                          "referencedDeclaration": 1012,
-                          "src": "11853:5:0",
+                          "referencedDeclaration": 1006,
+                          "src": "11835:5:0",
                           "typeDescriptions": {
                             "typeIdentifier": "t_mapping$_t_bytes32_$_t_struct$_Transaction_$806_storage_$",
                             "typeString": "mapping(bytes32 => struct wallet.Transaction storage ref)"
                           }
                         },
-                        "id": 998,
+                        "id": 992,
                         "indexExpression": {
                           "argumentTypes": null,
                           "baseExpression": {
                             "argumentTypes": null,
-                            "id": 995,
+                            "id": 989,
                             "name": "m_pendingIndex",
                             "nodeType": "Identifier",
                             "overloadedDeclarations": [],
                             "referencedDeclaration": 725,
-                            "src": "11859:14:0",
+                            "src": "11841:14:0",
                             "typeDescriptions": {
                               "typeIdentifier": "t_array$_t_bytes32_$dyn_storage",
                               "typeString": "bytes32[] storage ref"
                             }
                           },
-                          "id": 997,
+                          "id": 991,
                           "indexExpression": {
                             "argumentTypes": null,
-                            "id": 996,
+                            "id": 990,
                             "name": "i",
                             "nodeType": "Identifier",
                             "overloadedDeclarations": [],
-                            "referencedDeclaration": 985,
-                            "src": "11874:1:0",
+                            "referencedDeclaration": 979,
+                            "src": "11856:1:0",
                             "typeDescriptions": {
                               "typeIdentifier": "t_uint256",
                               "typeString": "uint256"
@@ -25861,7 +25671,7 @@
                           "isPure": false,
                           "lValueRequested": false,
                           "nodeType": "IndexAccess",
-                          "src": "11859:17:0",
+                          "src": "11841:17:0",
                           "typeDescriptions": {
                             "typeIdentifier": "t_bytes32",
                             "typeString": "bytes32"
@@ -25872,7 +25682,7 @@
                         "isPure": false,
                         "lValueRequested": true,
                         "nodeType": "IndexAccess",
-                        "src": "11853:24:0",
+                        "src": "11835:24:0",
                         "typeDescriptions": {
                           "typeIdentifier": "t_struct$_Transaction_$806_storage",
                           "typeString": "struct wallet.Transaction storage ref"
@@ -25883,9 +25693,9 @@
                         "typeString": "tuple()"
                       }
                     },
-                    "id": 1000,
+                    "id": 994,
                     "nodeType": "ExpressionStatement",
-                    "src": "11846:31:0"
+                    "src": "11828:31:0"
                   },
                   "condition": {
                     "argumentTypes": null,
@@ -25893,19 +25703,19 @@
                       "typeIdentifier": "t_uint256",
                       "typeString": "uint256"
                     },
-                    "id": 990,
+                    "id": 984,
                     "isConstant": false,
                     "isLValue": false,
                     "isPure": false,
                     "lValueRequested": false,
                     "leftExpression": {
                       "argumentTypes": null,
-                      "id": 988,
+                      "id": 982,
                       "name": "i",
                       "nodeType": "Identifier",
                       "overloadedDeclarations": [],
-                      "referencedDeclaration": 985,
-                      "src": "11817:1:0",
+                      "referencedDeclaration": 979,
+                      "src": "11799:1:0",
                       "typeDescriptions": {
                         "typeIdentifier": "t_uint256",
                         "typeString": "uint256"
@@ -25915,36 +25725,36 @@
                     "operator": "<",
                     "rightExpression": {
                       "argumentTypes": null,
-                      "id": 989,
+                      "id": 983,
                       "name": "length",
                       "nodeType": "Identifier",
                       "overloadedDeclarations": [],
-                      "referencedDeclaration": 980,
-                      "src": "11821:6:0",
+                      "referencedDeclaration": 974,
+                      "src": "11803:6:0",
                       "typeDescriptions": {
                         "typeIdentifier": "t_uint256",
                         "typeString": "uint256"
                       }
                     },
-                    "src": "11817:10:0",
+                    "src": "11799:10:0",
                     "typeDescriptions": {
                       "typeIdentifier": "t_bool",
                       "typeString": "bool"
                     }
                   },
-                  "id": 1001,
+                  "id": 995,
                   "initializationExpression": {
                     "assignments": [
-                      985
+                      979
                     ],
                     "declarations": [
                       {
                         "constant": false,
-                        "id": 985,
+                        "id": 979,
                         "name": "i",
                         "nodeType": "VariableDeclaration",
-                        "scope": 1008,
-                        "src": "11805:6:0",
+                        "scope": 1002,
+                        "src": "11787:6:0",
                         "stateVariable": false,
                         "storageLocation": "default",
                         "typeDescriptions": {
@@ -25952,10 +25762,10 @@
                           "typeString": "uint256"
                         },
                         "typeName": {
-                          "id": 984,
+                          "id": 978,
                           "name": "uint",
                           "nodeType": "ElementaryTypeName",
-                          "src": "11805:4:0",
+                          "src": "11787:4:0",
                           "typeDescriptions": {
                             "typeIdentifier": "t_uint256",
                             "typeString": "uint256"
@@ -25965,18 +25775,18 @@
                         "visibility": "internal"
                       }
                     ],
-                    "id": 987,
+                    "id": 981,
                     "initialValue": {
                       "argumentTypes": null,
                       "hexValue": "30",
-                      "id": 986,
+                      "id": 980,
                       "isConstant": false,
                       "isLValue": false,
                       "isPure": true,
                       "kind": "number",
                       "lValueRequested": false,
                       "nodeType": "Literal",
-                      "src": "11814:1:0",
+                      "src": "11796:1:0",
                       "subdenomination": null,
                       "typeDescriptions": {
                         "typeIdentifier": "t_rational_0_by_1",
@@ -25985,12 +25795,12 @@
                       "value": "0"
                     },
                     "nodeType": "VariableDeclarationStatement",
-                    "src": "11805:10:0"
+                    "src": "11787:10:0"
                   },
                   "loopExpression": {
                     "expression": {
                       "argumentTypes": null,
-                      "id": 992,
+                      "id": 986,
                       "isConstant": false,
                       "isLValue": false,
                       "isPure": false,
@@ -25998,15 +25808,15 @@
                       "nodeType": "UnaryOperation",
                       "operator": "++",
                       "prefix": true,
-                      "src": "11829:3:0",
+                      "src": "11811:3:0",
                       "subExpression": {
                         "argumentTypes": null,
-                        "id": 991,
+                        "id": 985,
                         "name": "i",
                         "nodeType": "Identifier",
                         "overloadedDeclarations": [],
-                        "referencedDeclaration": 985,
-                        "src": "11831:1:0",
+                        "referencedDeclaration": 979,
+                        "src": "11813:1:0",
                         "typeDescriptions": {
                           "typeIdentifier": "t_uint256",
                           "typeString": "uint256"
@@ -26017,12 +25827,12 @@
                         "typeString": "uint256"
                       }
                     },
-                    "id": 993,
+                    "id": 987,
                     "nodeType": "ExpressionStatement",
-                    "src": "11829:3:0"
+                    "src": "11811:3:0"
                   },
                   "nodeType": "ForStatement",
-                  "src": "11800:77:0"
+                  "src": "11782:77:0"
                 },
                 {
                   "expression": {
@@ -26032,18 +25842,18 @@
                       "argumentTypes": [],
                       "expression": {
                         "argumentTypes": null,
-                        "id": 1002,
+                        "id": 996,
                         "name": "super",
                         "nodeType": "Identifier",
                         "overloadedDeclarations": [],
-                        "referencedDeclaration": 1046,
-                        "src": "11887:5:0",
+                        "referencedDeclaration": 1040,
+                        "src": "11869:5:0",
                         "typeDescriptions": {
-                          "typeIdentifier": "t_super$_wallet_$1013",
+                          "typeIdentifier": "t_super$_wallet_$1007",
                           "typeString": "contract super wallet"
                         }
                       },
-                      "id": 1004,
+                      "id": 998,
                       "isConstant": false,
                       "isLValue": false,
                       "isPure": false,
@@ -26051,13 +25861,13 @@
                       "memberName": "clearPending",
                       "nodeType": "MemberAccess",
                       "referencedDeclaration": 703,
-                      "src": "11887:18:0",
+                      "src": "11869:18:0",
                       "typeDescriptions": {
                         "typeIdentifier": "t_function_internal_nonpayable$__$returns$__$",
                         "typeString": "function ()"
                       }
                     },
-                    "id": 1005,
+                    "id": 999,
                     "isConstant": false,
                     "isLValue": false,
                     "isPure": false,
@@ -26065,20 +25875,20 @@
                     "lValueRequested": false,
                     "names": [],
                     "nodeType": "FunctionCall",
-                    "src": "11887:20:0",
+                    "src": "11869:20:0",
                     "typeDescriptions": {
                       "typeIdentifier": "t_tuple$__$",
                       "typeString": "tuple()"
                     }
                   },
-                  "id": 1006,
+                  "id": 1000,
                   "nodeType": "ExpressionStatement",
-                  "src": "11887:20:0"
+                  "src": "11869:20:0"
                 }
               ]
             },
             "documentation": null,
-            "id": 1008,
+            "id": 1002,
             "implemented": true,
             "isConstructor": false,
             "isDeclaredConst": false,
@@ -26086,31 +25896,31 @@
             "name": "clearPending",
             "nodeType": "FunctionDefinition",
             "parameters": {
-              "id": 977,
+              "id": 971,
               "nodeType": "ParameterList",
               "parameters": [],
-              "src": "11733:2:0"
+              "src": "11715:2:0"
             },
             "payable": false,
             "returnParameters": {
-              "id": 978,
+              "id": 972,
               "nodeType": "ParameterList",
               "parameters": [],
-              "src": "11745:0:0"
+              "src": "11727:0:0"
             },
-            "scope": 1013,
-            "src": "11712:202:0",
+            "scope": 1007,
+            "src": "11694:202:0",
             "stateMutability": "nonpayable",
             "superFunction": 703,
             "visibility": "internal"
           },
           {
             "constant": false,
-            "id": 1012,
+            "id": 1006,
             "name": "m_txs",
             "nodeType": "VariableDeclaration",
-            "scope": 1013,
-            "src": "11983:38:0",
+            "scope": 1007,
+            "src": "11965:38:0",
             "stateVariable": true,
             "storageLocation": "default",
             "typeDescriptions": {
@@ -26118,30 +25928,30 @@
               "typeString": "mapping(bytes32 => struct wallet.Transaction)"
             },
             "typeName": {
-              "id": 1011,
+              "id": 1005,
               "keyType": {
-                "id": 1009,
+                "id": 1003,
                 "name": "bytes32",
                 "nodeType": "ElementaryTypeName",
-                "src": "11992:7:0",
+                "src": "11974:7:0",
                 "typeDescriptions": {
                   "typeIdentifier": "t_bytes32",
                   "typeString": "bytes32"
                 }
               },
               "nodeType": "Mapping",
-              "src": "11983:32:0",
+              "src": "11965:32:0",
               "typeDescriptions": {
                 "typeIdentifier": "t_mapping$_t_bytes32_$_t_struct$_Transaction_$806_storage_$",
                 "typeString": "mapping(bytes32 => struct wallet.Transaction)"
               },
               "valueType": {
                 "contractScope": null,
-                "id": 1010,
+                "id": 1004,
                 "name": "Transaction",
                 "nodeType": "UserDefinedTypeName",
                 "referencedDeclaration": 806,
-                "src": "12003:11:0",
+                "src": "11985:11:0",
                 "typeDescriptions": {
                   "typeIdentifier": "t_struct$_Transaction_$806_storage_ptr",
                   "typeString": "struct wallet.Transaction"
@@ -26152,11 +25962,11 @@
             "visibility": "internal"
           }
         ],
-        "scope": 1014,
-        "src": "9483:2541:0"
+        "scope": 1008,
+        "src": "9483:2523:0"
       }
     ],
-    "src": "523:11501:0"
+    "src": "523:11483:0"
   },
   "compiler": {
     "name": "solc",
@@ -26164,5 +25974,5 @@
   },
   "networks": {},
   "schemaVersion": "2.0.1",
-  "updatedAt": "2018-10-09T05:38:30.777Z"
+  "updatedAt": "2018-11-07T05:11:40.274Z"
 }
