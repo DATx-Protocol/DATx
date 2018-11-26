@@ -7,17 +7,11 @@ namespace datxos
     /// @abi action
     void extract::recordtrx(transaction_id_type trxid, account_name producer,string category)
     {   
-        //handle expire transaction and rollback transaction
-        this->updateexpire();
-        this->rollbacktrx();
-
         require_auth(producer);
         account_name producers[3]; 
-        uint32_t bytes_populated = get_active_producers(producers, sizeof(account_name)*3); 
+        auto bytes_populated = get_active_producers(producers, sizeof(producers)); 
         bool Isproducer = false; 
-        print( "****recordtrx current producer:", name{producer} );
-        for (int i = 0; i < sizeof(producers)/sizeof(account_name) ;i++){ 
-            print( "****recordtrx active producer:", name{producers[i]} );
+        for (size_t i = 0; i < bytes_populated/ sizeof(account_name) ;i++){ 
             if(producers[i] == producer) {
                 Isproducer = true; 
                 break;
@@ -25,15 +19,18 @@ namespace datxos
         } 
         datxos_assert(Isproducer, "this func can only be called by producers");
 
-        transrecords transrecord_table(N(Datxos.token),N(Datxos.token));
+        if (category != "DBTC" && category != "DETH" && category != "DEOS"){
+            datxos_assert(false, "the category is not (DBTC,DETH,DEOS).");
+        }
+
+        transrecords transrecord_table(N(datxos.dtoke),N(datxos.dtoke));
         auto idx0 = transrecord_table.template get_index<N(fixed_key)>();
         auto itr0 = idx0.find( get_fixed_key(trxid) );
         datxos_assert(itr0 != idx0.end(), "trxid not exists in token transfer");
 
-        datxos_assert(itr0 ->quantity.symbol.name() == string_to_name(category.c_str())
-        ,"category not correct");
-
-
+        std::string newCategory = category;
+        datxos_assert(itr0 ->quantity.symbol == string_to_symbol(4,newCategory.c_str()),"category not correct");
+ 
         records trans_table(_self,_self);
         auto idx = trans_table.template get_index<N(fixed_key)>();
         auto itr = idx.find( get_fixed_key(trxid) );
@@ -56,7 +53,7 @@ namespace datxos
             s.trxid= trxid;
             s.start_time = now();
             s.producer = producer;
-            s.category = category;
+            s.category = newCategory;
         }); 
 
     }
@@ -64,10 +61,6 @@ namespace datxos
 
     /// @abi action
     void extract::setverifiers(vector<account_name> accounts){
-        //handle expire transaction and rollback transaction
-        this->updateexpire();
-        this->rollbacktrx();
-
         require_auth(_self);
 
         verifiers veri_table(_self,_self);
@@ -84,10 +77,6 @@ namespace datxos
 
     /// @abi action
     void extract::setdoing(transaction_id_type trxid, account_name producer,account_name verifier){
-        //handle expire transaction and rollback transaction
-        this->updateexpire();
-        this->rollbacktrx();
-
         // require_auth(verifier);
         verifiers veri_table(_self,_self);
         auto vidx = veri_table.find(verifier);
@@ -100,7 +89,6 @@ namespace datxos
         datxos_assert(itr->producer == producer, "trxid not this producer");
         
         auto itr2 = std::find( itr->verifiers.begin(), itr->verifiers.end(), verifier );
-        print("verifier name",N(*itr2),"\n");
         datxos_assert( itr2 == itr->verifiers.end(), "this verifier has comfirmed this trxid" );
 
         trans_table.modify(*itr, get_self(), [&](auto& p)
@@ -109,8 +97,8 @@ namespace datxos
                                               });
         
         account_name producers[3];
-        uint32_t bytes_populated = get_active_producers(producers, sizeof(account_name)*3);      
-        int psize = sizeof(producers)/sizeof(account_name)*2/3+1;
+        auto bytes_populated = get_active_producers(producers, sizeof(producers));      
+        int psize = bytes_populated/sizeof(account_name)*2/3;
 
         if(itr->verifiers.size() > psize){
             trans_table.modify(*itr, get_self(), [&](auto& p)
@@ -122,19 +110,13 @@ namespace datxos
     
     /// @abi action
     void extract::setsuccess(transaction_id_type trxid ,account_name producer){
-        //handle expire transaction and rollback transaction
-        this->updateexpire();
-        this->rollbacktrx();
-
         require_auth(producer);
 
         account_name producers[3]; 
-        uint32_t bytes_populated = get_active_producers(producers, sizeof(account_name)*3); 
-        int psize = sizeof(producers)/sizeof(account_name)*2/3+1;
+        auto bytes_populated = get_active_producers(producers, sizeof(producers)); 
+        int psize = bytes_populated/sizeof(account_name)*2/3;
         bool Isproducer = false; 
-        print( "****setsuccess current producer:", name{producer} );
-        for (int i = 0; i < sizeof(producers)/sizeof(account_name) ;i++){ 
-            print( "****setsuccess active producer:", name{producers[i]} );
+        for (size_t i = 0; i < bytes_populated/sizeof(account_name) ;i++){ 
             if(producers[i] == producer) {
                 Isproducer = true; 
                 break;
@@ -146,6 +128,9 @@ namespace datxos
         auto idx = trans_table.template get_index<N(fixed_key)>();
         auto itr = idx.find(get_fixed_key(trxid) );
         datxos_assert(itr != idx.end(), "trxid not in doing records");
+
+        auto itr2 = std::find( itr->successconfirm.begin(), itr->successconfirm.end(), producer );
+        datxos_assert( itr2 == itr->successconfirm.end(), "setsuccess this producer has comfirmed this trxid" );
 
         trans_table.modify(*itr, get_self(), [&](auto& p)
                                               {
@@ -168,15 +153,15 @@ namespace datxos
 
     /// @abi action
     void extract::updateexpire(){
-         this->rollbacktrx();
+         //this->rollbacktrx();
 
         account_name producers[3];
-        uint32_t bytes_populated = get_active_producers(producers, sizeof(account_name)*3);      
-        int psize = sizeof(producers)/sizeof(account_name)*2/3+1;
+        uint32_t bytes_populated = get_active_producers(producers, sizeof(producers));      
+        int psize = bytes_populated/sizeof(account_name)*2/3;
         records trans_table(_self,_self);
         auto idx = trans_table.template get_index<N(start_time)>();
         int count = 0;
-        for ( auto it = idx.cbegin(); it != idx.cend() && count < 100;) {
+        for ( auto it = idx.cbegin(); it != idx.cend() && count < 5;) {
             uint64_t subtime = now() - it->start_time;
             if(subtime <= 5 * 60){
                 break;
@@ -200,30 +185,41 @@ namespace datxos
             }
         } 
     }
-
+/// @abi action
     void extract::rollbacktrx(){
         records trans_table(_self,_self);
         successtrxs success_table(_self,_self);
-
-        for ( auto it = trans_table.cbegin(); it != trans_table.cend(); ++it) { 
+        int count = 0; 
+        for ( auto it = trans_table.cbegin(); it != trans_table.cend()&&count < 5;) { 
             auto trxid = it->trxid;
 
             //get transaction details and rollback
-            uint64_t subtime = current_time() - it->countdown_time;
+            if (it->countdown_time == 0) {
+                continue;
+            }
+            uint64_t subtime = now() - it->countdown_time;
 
             if ((it->category == "DETH" && subtime > 30*60) || (it->category == "DEOS" && subtime > 5*60)){
                         
-                transrecords transrecord_table(N(datxos.recharge),N(datxos.recharge));
+                transrecords transrecord_table(N(datxos.dtoke),N(datxos.dtoke));
                 auto idx0 = transrecord_table.template get_index<N(fixed_key)>();
                 auto itr0 = idx0.find( get_fixed_key(trxid) );
 
                 datxos_assert(itr0 != idx0.end(), "trxid not exists in token transfer");
 
                 // pay the cost
-                action(permission_level{ _self, N(active) },
-                    N(datxos.dtoke), N(extract),
-                    std::make_tuple(N(datxos.recharge),itr0 -> account, itr0 -> quantity, std::string(""))
-                ).send();
+                if(it->category == "DETH"){
+                    action(permission_level{N(datxos.deth), N(active) },
+                        N(datxos.dtoke), N(transfer),
+                        std::make_tuple(N(datxos.deth),itr0 -> account, itr0 -> quantity, std::string("rollback"))
+                    ).send();
+                }
+                else if (it->category == "DEOS"){
+                    action(permission_level{N(datxos.deos), N(active) },
+                        N(datxos.dtoke), N(transfer),
+                        std::make_tuple(N(datxos.deos),itr0 -> account, itr0 -> quantity, std::string("rollback"))
+                    ).send();
+                }
 
                 success_table.emplace(_self, [&](auto &s) {
                     s.id= success_table.available_primary_key();
@@ -232,12 +228,14 @@ namespace datxos
                     s.timestamp = now();
                     s.category = it->category;
                 });
-                trans_table.erase(*it);
-
+                it = trans_table.erase(it);
+                ++count;
+            }else{
+                ++it;
             }
         }
     }
 
-} // namespace Datxos
+} //namespace Datxos
 
-DATXOS_ABI( datxos::extract, (recordtrx)(setverifiers)(setdoing)(setsuccess)(updateexpire))
+DATXOS_ABI( datxos::extract, (recordtrx)(setverifiers)(setdoing)(setsuccess)(updateexpire)(rollbacktrx))
