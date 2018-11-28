@@ -43,3 +43,13 @@ else
 fi
 
 echo "build successful, see build floder"
+
+
+echo 'start building clmse...'
+cd ../clmse
+
+echo 'start install node packages.....'
+npm install  --unsafe-perm
+npm link
+
+echo 'clmse build success'

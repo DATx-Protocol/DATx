@@ -20,12 +20,12 @@ async function getNonce(myAddr){
   if(nonce == null || nonce == undefined || nonce == ""){
     nonce = await web3.eth.getTransactionCount(myAddr);
   }
+  redis.client.set('ethNonce-' + myAddr,parseInt(nonce)+1);
   return nonce;
 }
 
 async function withdraw(myAddr, contractAddr, to, value, privateKey, data) {
-  var nonce = await getNonce();//web3.eth.getTransactionCount(myAddr);
-  redis.client.set('ethNonce-' + myAddr,parseInt(nonce)+1);
+  var nonce = await getNonce(myAddr);//web3.eth.getTransactionCount(myAddr);
   var privateKey = Buffer.from(privateKey, 'hex');
 
   var abi = JSON.parse(rf.readFileSync(path.resolve(__dirname, '../config/wallet.json'),'utf-8')).abi;
@@ -40,7 +40,7 @@ async function withdraw(myAddr, contractAddr, to, value, privateKey, data) {
     gasLimit: web3.utils.toHex(se["eth-gaslimit"]),
     value: '',
     data: contractInstance.methods.execute(to, web3.utils.toHex(value), data).encodeABI(),
-    chainId: 3
+    chainId: 1
   };
   var tx = new Tx(rawTx);
   tx.sign(privateKey);
