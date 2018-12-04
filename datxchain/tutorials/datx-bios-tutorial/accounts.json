@@ -1,0 +1,81 @@
+{
+    "producers": [
+        {
+            "name": "dotc",
+            "pub": "DATX8ZfXdqyYXP9zQUownLrigiah1oTCfXrhjyiyPp37s46VVNEqBP",
+            "pvt": "5JzkrhAvDJjjhABCbNTzgWsb8YJXubQpx9bJFQxAzgAw5RwBSVK"
+        },
+        {
+            "name": "avazu",
+            "pub": "DATX7uFNCfApQfTWmXo3JedZYwLaEWn45xecV1D5WDRPZtfcNt9yJW",
+            "pvt": "5JVGdER6rtBECAi6t16x5PunBSt7JRZLpeJV4qj2GwJns3PGHPq"
+        },
+        {
+            "name": "teebik",
+            "pub": "DATX7VeuzJmUbjC19HsoZpX4UVV8YQQEed4urAXrRvDMUfoRpUptFQ",
+            "pvt": "5JpR25dwHsvbHPwxoEuA6ZMC6hJPSTx9yPfcSVUgeqSnmsAfWuF"
+        },
+        {
+            "name": "dug",
+            "pub": "DATX5y3Tm1czTCia3o3JidVKmC78J9gRQU8qHjmRjFxTyhh2vxvF5d",
+            "pvt": "5JJjaKnAb9KM2vkkJDgrYXoeUEdGgWtB5WK1a38wrmKnS3KtkS6"
+        },
+        {
+            "name": "obike",
+            "pub": "DATX5yR5GNn363W3cnet5PE6xWZxa2hDAhmJN5RrB1e3fmJmVNnDRJ",
+            "pvt": "5K7hmHA2U3nNpwGx6AffWsHyvsSMJvVKVmSgxnSYAjAvjUfzd5j"
+        }
+    ],
+    "users": [
+        {
+            "name": "alice",
+            "pub": "DATX76E6CdbvWF7DA4ZoP6FG2kDnXfmdLNWLqfPsgukq3QMeXcGSrh",
+            "pvt": "5K6GKhesiZ5JfxjgS2pW79fJWPPeQnPy6BELghgkxLG2wdByRYq"
+        },
+        {
+            "name": "bob",
+            "pub": "DATX6JQXAF9rYhAKkRm641sDpoWLBChFSwudK8zPRunK8nMtDQn8uv",
+            "pvt": "5KVUHLRekWCvaQcz32RUWe5eSJyCW2WhSttVtephApTMDpcYdV5"
+        },
+        {
+            "name": "charlie",
+            "pub": "DATX8aPzBJAho7nwCiXhvQmxXkm3skDfQEqsc4VhwDzSNw3qpTzcjh",
+            "pvt": "5KA2mYkK7WUZ46ojDDKxLuLsSHPaxCjqLJb9A7EA67jszxExB47"
+        },
+        {
+            "name": "dave",
+            "pub": "DATX54UEB2pUpnEhEtxJY5h9eThQ3wAkse9NCaPFnEXUt7H2fifdVp",
+            "pvt": "5KDrVvFYRVYicdMvdGqu6MbQUzbfSL789fDjvjYBVzT2XEaHZw9"
+        },
+        {
+            "name": "eve",
+            "pub": "DATX6cNcTC6WTFkKV4C8DoxcTXdDTDKvj3vgZEVDGVFckK1eTNJQtf",
+            "pvt": "5JRMbcnc35NkvxKTZUnoe3W4ENQCjhMUFwjN5jQmAqN9D7N6y3N"
+        },
+        {
+            "name": "isaac",
+            "pub": "DATX8UkmsnCo4GxDihbKwgoZY6f2QLSMEqBZ2frGLckxrCHrz15r7X",
+            "pvt": "5HqyipkJSm5fwYhbhGC3vmmoBwabtgJSPecnvmN2mMrCTQfWBSS"
+        },
+        {
+            "name": "ivan",
+            "pub": "DATX8Smcv2eMoFcp1EQSBxcAeuBowSS9xesuHjhvTnK4AACjRycTVA",
+            "pvt": "5KPr55J2UQNUh3xP5Q6ebqqV6MK5usrXxG4qqRfpaLieGa8VpCm"
+        },
+        {
+            "name": "justin",
+            "pub": "DATX57VTWSiPyx45cSWGdGNtAZnmpqMrAvASQmL9hmXnoLNrgadwf7",
+            "pvt": "5JV9UNEpPKa4sqxSxvGWYPY9ZBTzAttyq7ShPvLUJSetwAeSXFW"
+        },
+        {
+            "name": "oscar",
+            "pub": "DATX5dt9CWCKM1scrWpFsRbzY71Up9UYFmJs1ySFKLJDGdYJmgEH3f",
+            "pvt": "5K4GSGP2r1Yu3RqmPZPF8Hv6Zrv2YWsUEoCqwwHxKsZavz2tChg"
+        },
+        {
+            "name": "pat",
+            "pub": "DATX8FdMPpPxpG5QAqGLncY5kBrEQ9NXPKCKnLH6oWDMPR8q8BrEmT",
+            "pvt": "5K4MmsY7Th8DqjEY2vbM7npaxSQ56XzvNULkJeqKmbYoVRmPPpB"
+        }
+    ]
+}

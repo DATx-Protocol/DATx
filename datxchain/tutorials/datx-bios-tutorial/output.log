@@ -1,0 +1,50 @@
+rm -rf ./nodes/datxos/
+mkdir -p ./nodes/datxos/
+noddatx     --max-irreversible-block-age -1    --genesis-json /home/cat/gopath/src/datx/datxchain/tutorials/datx-bios-tutorial/genesis.json    --blocks-dir /home/cat/gopath/src/datx/datxchain/tutorials/datx-bios-tutorial/nodes/datxos/blocks    --data-dir /home/cat/gopath/src/datx/datxchain/tutorials/datx-bios-tutorial/nodes/datxos    --chain-state-db-size-mb 1024    --verbose-http-errors    --contracts-console    --max-transaction-time 1000    --max-clients 50    --p2p-max-nodes-per-host 50    --enable-stale-production     --filter-on "*"    --producer-name datxos    --private-key '["DATX8Znrtgwt8TfpmbVpTKvA2oB8Nqey625CLN8bCN3TEbgx86Dsvr","5K463ynhZoCDDa4RDcr63cUwWLTnKqmdcoTKTHBjqoKfv4u5V7p"]'    --accessory datxos::http_accessory    --accessory datxos::core_api_accessory    --accessory datxos::producer_accessory    --accessory datxos::core_accessory    --accessory datxos::p2p_net_accessory    --accessory datxos::p2p_net_api_accessory    --accessory datxos::history_accessory    --accessory datxos::history_api_accessory    2>>./nodes/datxos/stderr
+tail -n 20 ./nodes/datxos/stderr
+rm -rf ./nodes/datxos/
+mkdir -p ./nodes/datxos/
+noddatx     --max-irreversible-block-age -1    --genesis-json /home/cat/gopath/src/datx/datxchain/tutorials/datx-bios-tutorial/genesis.json    --blocks-dir /home/cat/gopath/src/datx/datxchain/tutorials/datx-bios-tutorial/nodes/datxos/blocks    --data-dir /home/cat/gopath/src/datx/datxchain/tutorials/datx-bios-tutorial/nodes/datxos    --chain-state-db-size-mb 1024    --verbose-http-errors    --contracts-console    --max-transaction-time 1000    --max-clients 50    --p2p-max-nodes-per-host 50    --enable-stale-production     --filter-on "*"    --producer-name datxos    --private-key '["DATX8Znrtgwt8TfpmbVpTKvA2oB8Nqey625CLN8bCN3TEbgx86Dsvr","5K463ynhZoCDDa4RDcr63cUwWLTnKqmdcoTKTHBjqoKfv4u5V7p"]'    --accessory datxos::http_accessory    --accessory datxos::core_api_accessory    --accessory datxos::producer_accessory    --accessory datxos::core_accessory    --accessory datxos::p2p_net_accessory    --accessory datxos::p2p_net_api_accessory    --accessory datxos::history_accessory    --accessory datxos::history_api_accessory    2>>./nodes/datxos/stderr
+tail -n 20 ./nodes/datxos/stderr
+cldatx create account datxos datxos.bpay DATX8Znrtgwt8TfpmbVpTKvA2oB8Nqey625CLN8bCN3TEbgx86Dsvr
+cldatx create account datxos datxos.msig DATX8Znrtgwt8TfpmbVpTKvA2oB8Nqey625CLN8bCN3TEbgx86Dsvr
+cldatx create account datxos datxos.names DATX8Znrtgwt8TfpmbVpTKvA2oB8Nqey625CLN8bCN3TEbgx86Dsvr
+cldatx create account datxos datxos.ram DATX8Znrtgwt8TfpmbVpTKvA2oB8Nqey625CLN8bCN3TEbgx86Dsvr
+cldatx create account datxos datxos.save DATX8Znrtgwt8TfpmbVpTKvA2oB8Nqey625CLN8bCN3TEbgx86Dsvr
+cldatx create account datxos datxos.stake DATX8Znrtgwt8TfpmbVpTKvA2oB8Nqey625CLN8bCN3TEbgx86Dsvr
+cldatx create account datxos datxos.token DATX8Znrtgwt8TfpmbVpTKvA2oB8Nqey625CLN8bCN3TEbgx86Dsvr
+cldatx create account datxos datxos.vpay DATX8Znrtgwt8TfpmbVpTKvA2oB8Nqey625CLN8bCN3TEbgx86Dsvr
+cldatx create account datxos datxos.veri DATX8Znrtgwt8TfpmbVpTKvA2oB8Nqey625CLN8bCN3TEbgx86Dsvr
+cldatx create account datxos datxos.charg DATX8Znrtgwt8TfpmbVpTKvA2oB8Nqey625CLN8bCN3TEbgx86Dsvr
+cldatx create account datxos datxos.deth DATX8Znrtgwt8TfpmbVpTKvA2oB8Nqey625CLN8bCN3TEbgx86Dsvr
+cldatx create account datxos datxos.deos DATX8Znrtgwt8TfpmbVpTKvA2oB8Nqey625CLN8bCN3TEbgx86Dsvr
+cldatx create account datxos datxos.dbtc DATX8Znrtgwt8TfpmbVpTKvA2oB8Nqey625CLN8bCN3TEbgx86Dsvr
+cldatx create account datxos datxos.extra DATX8Znrtgwt8TfpmbVpTKvA2oB8Nqey625CLN8bCN3TEbgx86Dsvr
+cldatx create account datxos datxos.dtoke DATX8Znrtgwt8TfpmbVpTKvA2oB8Nqey625CLN8bCN3TEbgx86Dsvr
+rm -rf ./nodes/datxos/
+mkdir -p ./nodes/datxos/
+noddatx     --max-irreversible-block-age -1    --genesis-json /home/cat/gopath/src/datx/datxchain/tutorials/datx-bios-tutorial/genesis.json    --blocks-dir /home/cat/gopath/src/datx/datxchain/tutorials/datx-bios-tutorial/nodes/datxos/blocks    --data-dir /home/cat/gopath/src/datx/datxchain/tutorials/datx-bios-tutorial/nodes/datxos    --chain-state-db-size-mb 1024    --verbose-http-errors    --contracts-console    --max-transaction-time 1000    --max-clients 50    --p2p-max-nodes-per-host 50    --enable-stale-production     --filter-on "*"    --producer-name datxos    --private-key '["DATX8Znrtgwt8TfpmbVpTKvA2oB8Nqey625CLN8bCN3TEbgx86Dsvr","5K463ynhZoCDDa4RDcr63cUwWLTnKqmdcoTKTHBjqoKfv4u5V7p"]'    --accessory datxos::http_accessory    --accessory datxos::core_api_accessory    --accessory datxos::producer_accessory    --accessory datxos::core_accessory    --accessory datxos::p2p_net_accessory    --accessory datxos::p2p_net_api_accessory    --accessory datxos::history_accessory    --accessory datxos::history_api_accessory    2>>./nodes/datxos/stderr
+tail -n 20 ./nodes/datxos/stderr
+cldatx create account datxos datxos.bpay DATX8Znrtgwt8TfpmbVpTKvA2oB8Nqey625CLN8bCN3TEbgx86Dsvr
+cldatx create account datxos datxos.bpay DATX8Znrtgwt8TfpmbVpTKvA2oB8Nqey625CLN8bCN3TEbgx86Dsvr
+cldatx create account datxos datxos.msig DATX8Znrtgwt8TfpmbVpTKvA2oB8Nqey625CLN8bCN3TEbgx86Dsvr
+cldatx create account datxos datxos.names DATX8Znrtgwt8TfpmbVpTKvA2oB8Nqey625CLN8bCN3TEbgx86Dsvr
+cldatx create account datxos datxos.ram DATX8Znrtgwt8TfpmbVpTKvA2oB8Nqey625CLN8bCN3TEbgx86Dsvr
+cldatx create account datxos datxos.save DATX8Znrtgwt8TfpmbVpTKvA2oB8Nqey625CLN8bCN3TEbgx86Dsvr
+cldatx create account datxos datxos.stake DATX8Znrtgwt8TfpmbVpTKvA2oB8Nqey625CLN8bCN3TEbgx86Dsvr
+cldatx create account datxos datxos.token DATX8Znrtgwt8TfpmbVpTKvA2oB8Nqey625CLN8bCN3TEbgx86Dsvr
+cldatx create account datxos datxos.vpay DATX8Znrtgwt8TfpmbVpTKvA2oB8Nqey625CLN8bCN3TEbgx86Dsvr
+cldatx create account datxos datxos.veri DATX8Znrtgwt8TfpmbVpTKvA2oB8Nqey625CLN8bCN3TEbgx86Dsvr
+cldatx create account datxos datxos.charg DATX8Znrtgwt8TfpmbVpTKvA2oB8Nqey625CLN8bCN3TEbgx86Dsvr
+cldatx create account datxos datxos.deth DATX8Znrtgwt8TfpmbVpTKvA2oB8Nqey625CLN8bCN3TEbgx86Dsvr
+cldatx create account datxos datxos.deos DATX8Znrtgwt8TfpmbVpTKvA2oB8Nqey625CLN8bCN3TEbgx86Dsvr
+cldatx create account datxos datxos.dbtc DATX8Znrtgwt8TfpmbVpTKvA2oB8Nqey625CLN8bCN3TEbgx86Dsvr
+cldatx create account datxos datxos.extra DATX8Znrtgwt8TfpmbVpTKvA2oB8Nqey625CLN8bCN3TEbgx86Dsvr
+cldatx create account datxos datxos.dtoke DATX8Znrtgwt8TfpmbVpTKvA2oB8Nqey625CLN8bCN3TEbgx86Dsvr
+cldatx set contract datxos.token ../../build/contracts/DatxToken/
+cldatx set contract datxos.msig ../../build/contracts/DatxMsig/
+cldatx set contract datxos.charg ../../build/contracts/DatxRecharge/
+cldatx set contract datxos.dtoke ../../build/contracts/DatxDToken/
+cldatx set contract datxos.extra ../../build/contracts/DatxExtract/
+cldatx set account permission datxos.dtoke active '{"threshold": 1,"keys": [{"key": "DATX8Znrtgwt8TfpmbVpTKvA2oB8Nqey625CLN8bCN3TEbgx86Dsvr","weight": 1}],"accounts": [{"permission":{"actor":"datxos.charg","permission":"datxos.code"},"weight":1}]}' owner -p datxos.dtoke
+cldatx set account permission datxos.dtoke active '{"threshold": 1,"keys": [{"key": "DATX8Znrtgwt8TfpmbVpTKvA2oB8Nqey625CLN8bCN3TEbgx86Dsvr","weight": 1}],"accounts": [{"permission":{"actor":"datxos.extra","permission":"datxos.code"},"weight":1}]}' owner -p datxos.dtoke
