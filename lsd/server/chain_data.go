@@ -285,14 +285,14 @@ type Transaction struct {
 //SystemProducers ...
 type SystemProducers struct {
 	Rows []struct {
-		Owner         string `json:"owner"`
-		TotalVotes    string `json:"total_votes"`
-		ProducerKey   string `json:"producer_key"`
-		IsActive      int    `json:"is_active"`
-		URL           string `json:"url"`
-		UnpaidBlocks  int    `json:"unpaid_blocks"`
-		LastClaimTime int    `json:"last_claim_time"`
-		Location      int    `json:"location"`
+		Owner         string      `json:"owner"`
+		TotalVotes    string      `json:"total_votes"`
+		ProducerKey   string      `json:"producer_key"`
+		IsActive      int         `json:"is_active"`
+		URL           string      `json:"url"`
+		UnpaidBlocks  int         `json:"unpaid_blocks"`
+		LastClaimTime interface{} `json:"last_claim_time"`
+		Location      interface{} `json:"location"`
 	} `json:"rows"`
 	TotalProducerVoteWeight string `json:"total_producer_vote_weight"`
 	More                    string `json:"more"`

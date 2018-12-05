@@ -86,6 +86,18 @@ func GetCrossChainEnds() string {
 	return result
 }
 
+func GetEOSEndPoint() string {
+	var result string
+	cfg, err := GetConfig()
+	if err != nil {
+		log.Printf("GetEOSEndPoint Get config err:%v\n", err)
+		return result
+	}
+
+	result = cfg.Section("").Key("eos-endpoint").String()
+	return result
+}
+
 //GetWalletNameAndPassword ...
 func GetWalletNameAndPassword() (string, string) {
 	var cfg *ini.File

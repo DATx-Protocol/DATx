@@ -13,6 +13,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/mitchellh/mapstructure"
 )
 
 const (
@@ -24,6 +26,13 @@ type ActionsPara struct {
 	Pos         int64  `json:"pos"`
 	Offset      int64  `json:"offset"`
 	AccountName string `json:"account_name"`
+}
+
+type ActionData struct {
+	From     string `json:"from"`
+	To       string `json:"to"`
+	Quantity string `json:"quantity"`
+	Memo     string `json:"memo"`
 }
 
 //Action ...
@@ -49,20 +58,19 @@ type Action struct {
 				Actor      string `json:"actor"`
 				Permission string `json:"permission"`
 			} `json:"authorization"`
-			Data struct {
-				From     string `json:"from"`
-				To       string `json:"to"`
-				Quantity string `json:"quantity"`
-				Memo     string `json:"memo"`
-			} `json:"data"`
-			HexData string `json:"hex_data"`
+			Data    interface{} `json:"data"`
+			HexData string      `json:"hex_data"`
 		} `json:"act"`
-		Elapsed       int           `json:"elapsed"`
-		CPUUsage      int           `json:"cpu_usage"`
-		Console       string        `json:"console"`
-		TotalCPUUsage int           `json:"total_cpu_usage"`
-		TrxID         string        `json:"trx_id"`
-		InlineTraces  []interface{} `json:"inline_traces"`
+		ContextFree      bool          `json:"context_free"`
+		Elapsed          int           `json:"elapsed"`
+		Console          string        `json:"console"`
+		TrxID            string        `json:"trx_id"`
+		BlockNum         int           `json:"block_num"`
+		BlockTime        string        `json:"block_time"`
+		ProducerBlockID  string        `json:"producer_block_id"`
+		AccountRAMDeltas []interface{} `json:"account_ram_deltas"`
+		Except           interface{}   `json:"except"`
+		InlineTraces     []interface{} `json:"inline_traces"`
 	} `json:"action_trace"`
 }
 
@@ -125,6 +133,8 @@ func (eos *EOSNode) GetAccountActions(accountAddr string) ([]chainlib.Transactio
 		log.Printf("[EOSNode] GetAccountActions do http request: %v\n", errr)
 		return nil, errr
 	}
+	defer response.Body.Close()
+
 	if response.StatusCode != 200 {
 		log.Printf("[EOSNode] GetAccountActions http reponse: %v\n", response.Body)
 		return nil, fmt.Errorf("[EOSNode] GetAccountActions Response error: %v", response.Status)
@@ -156,8 +166,19 @@ func (eos *EOSNode) GetAccountActions(accountAddr string) ([]chainlib.Transactio
 			continue
 		}
 
-		if strings.Contains(v.ActionTrace.Act.Data.From, "eosio.") || strings.Contains(v.ActionTrace.Act.Data.To, "eosio.") {
-			log.Printf("[EOSNode] GetAccountActions: from=%v to=%v\n", v.ActionTrace.Act.Data.From, v.ActionTrace.Act.Data.To)
+		fmt.Printf("%v\n", v.ActionTrace.Act.Data)
+		var data ActionData
+		if err := mapstructure.Decode(v.ActionTrace.Act.Data, &data); err != nil {
+			log.Printf("mapstructure.Decode err: %v\n", err)
+			continue
+		}
+
+		from := data.From
+		to := data.To
+		quantity := data.Quantity
+		memo := data.Memo
+		if strings.Contains(from, "eosio.") || strings.Contains(to, "eosio.") {
+			log.Printf("[EOSNode] GetAccountActions: from=%v to=%v\n", from, to)
 			continue
 		}
 
@@ -165,12 +186,12 @@ func (eos *EOSNode) GetAccountActions(accountAddr string) ([]chainlib.Transactio
 		temp.TransactionID = v.ActionTrace.TrxID
 		temp.Category = "EOS"
 		temp.BlockNum = int64(v.BlockNum)
-		temp.From = v.ActionTrace.Act.Data.From
-		temp.To = v.ActionTrace.Act.Data.To
-		amountpos := strings.Index(v.ActionTrace.Act.Data.Quantity, " ")
-		amountstr := v.ActionTrace.Act.Data.Quantity[:amountpos]
+		temp.From = from
+		temp.To = to
+		amountpos := strings.Index(quantity, " ")
+		amountstr := quantity[:amountpos]
 		temp.Amount, _ = strconv.ParseFloat(amountstr, 64)
-		temp.Memo = v.ActionTrace.Act.Data.Memo
+		temp.Memo = memo
 
 		temp.Time = time.Now()
 		temp.IsIrrevisible = false

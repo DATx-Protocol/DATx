@@ -34,7 +34,7 @@ func main() {
 	delayqueue.StartRedis()
 
 	//start chain server
-	chainserver := server.NewChainServer(10)
+	chainserver := server.NewChainServer(50)
 	chainserver.Start()
 	defer chainserver.Close()
 
@@ -50,7 +50,10 @@ func main() {
 
 	eosAccount := common.GetTrusteeAccount("eos-mulAccount")
 	log.Printf("main get eos trustee account: %s\n", eosAccount)
-	eos := gatway.NewEOSNode("http://213.239.208.37:8888", eosAccount, chainserver)
+
+	eosfullNode := common.GetEOSEndPoint()
+	log.Printf("main get eos full node url: %s\n", eosfullNode)
+	eos := gatway.NewEOSNode(eosfullNode, eosAccount, chainserver)
 	chainserver.AddBrowser("EOS", eos)
 
 	//start http server
