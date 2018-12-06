@@ -5,12 +5,19 @@ rm -rf ./build/
 rm -rf ./node_modules/
 
 echo "start install node packages....."
-npm install  -g node-gyp 
-npm install  --unsafe-perm
+# npm install  -g node-gyp 
+# npm install  --unsafe-perm --allow-root --save-dev grunt
+yarn global add node-gyp
+yarn 
 
 echo "start install pkg...."
-npm install -g pkg
+#npm install -g pkg
+yarn global add pkg
 #cd ./node_mudules/scrypt
+
+yarnBin=`yarn global bin`
+export PATH=$PATH:${yarnBin}
+echo $PATH
 
 echo "start compile ...."
 pkg .
@@ -49,7 +56,7 @@ echo 'start building clmse...'
 cd ../clmse
 
 echo 'start install node packages.....'
-npm install  --unsafe-perm
-npm link
+yarn
+yarn link
 
 echo 'clmse build success'
