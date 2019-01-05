@@ -9,15 +9,14 @@ const INI = require("./ini-file-loader.js");
 const se = INI.getConfigFile();
 const httpClient = require('./client.js');
 const redis = require('./redis.js');
-
-const exec = require('child_process').exec;
+const util = require("./util")
 
 // The callback to handle requests
 function handler(request, response) {
   try {
     var pathName = url.parse(request.url).pathname;
     if (pathName == '/btc/withdraw'){
-      console.log('get btc withdraw,URl: ' + request.url);
+      util.log('get btc withdraw,URl: ' + request.url);
       var IsTestnet = 0;
       var trxid = '';
       var fee = 0;
@@ -57,24 +56,22 @@ function handler(request, response) {
 
             //buildTrx
             var trx = await bitcoinapi.buildTrx(se["btc-muladdress"],to,parseInt(value * 1e8),fee,{IsTestnet:IsTestnet},trxid); 
-            console.log('build trx for ' + trxid + '********:' + trx.toHex());
+            util.log('build trx for ' + trxid + '********:' + trx.toHex());
             //call other nodes
-            runDatxCmd("cldatx push action datxos.extra setdoing '[\"" + trxid + "\",\"" + nodeName + "\",\"" + se["producer-name"] + "\"]' -p " + se["producer-name"]);
+            util.runDatxCmd("cldatx push action datxos.extra setdoing '[\"" + trxid + "\",\"" + nodeName + "\",\"" + se["producer-name"] + "\"]' -p " + se["producer-name"]);
             var trxSerialize = await btcGatherSign(trx.toHex(),trxid,nodeName,sign,IsTestnet);
 
             //broadcast
             trx = bitcoinapi.getTrxFromHex(trxSerialize);
             result = await bitcoinapi.broadcastTrx(trx); 
             redis.client.set(trxid,trxSerialize);
-            console.log('broadcast success,datx trxid:' + trxid);
-            response.writeHead(200);
-            response.write(result);
-            response.end();
+            util.log('broadcast success,datx trxid:' + trxid);
+
+            rep(response,200,result);
           }catch(e){
-            console.log('Error:' + e.toString());
-            response.writeHead(500);
-            response.write('Error:' + e.toString());
-            response.end();
+            util.log('Error:' + e.toString());
+
+            rep(response,500,'Error:' + e.toString());
           }
           })()
         }
@@ -82,7 +79,7 @@ function handler(request, response) {
     }
 
     else if(pathName == '/btc/signTrx'){
-      console.log('get btc signTrx,URl: ' + request.url);
+      util.log('get btc signTrx,URl: ' + request.url);
       var IsTestnet = 0;
       var trxSerialize = '';
       var trxid = '';
@@ -172,23 +169,20 @@ function handler(request, response) {
             trx = await bitcoinapi.signTrx(trx,se["btc-wif"],script,{IsTestnet:IsTestnet});
             trxSerialize = trx.toHex();
             redis.client.set(trxid,trxSerialize);
-            response.writeHead(200);
-            response.write(trxSerialize);
-            response.end();
+
+            rep(response,200,trxSerialize);
 
             //call other nodes
             if(isFirst){
-              runDatxCmd("cldatx push action datxos.extra setdoing '[\"" + trxid + "\",\"" + nodeName + "\",\"" + se["producer-name"] + "\"]' -p " + se["producer-name"]);
+              util.runDatxCmd("cldatx push action datxos.extra setdoing '[\"" + trxid + "\",\"" + nodeName + "\",\"" + se["producer-name"] + "\"]' -p " + se["producer-name"]);
 
               trxSerialize = await btcGatherSign(trxSerialize,trxid,nodeName,sign,IsTestnet);
               trx = bitcoinapi.getTrxFromHex(trxSerialize);
               result = await bitcoinapi.broadcastTrx(trx); 
             }
           }catch(e){
-            console.log(e.toString());
-            response.writeHead(500);
-            response.write('Error:' + e.toString());
-            response.end();
+            util.log(e.toString());
+            rep(response,500,'Error:' + e.toString());
           }
           })();
         }
@@ -202,15 +196,13 @@ function handler(request, response) {
         var script = params.script;
         var result = bitcoinapi.decodeMemo(script);
 
-        response.writeHead(200);
-        response.write(result);
-        response.end();
+        rep(response,200,result);
       }
     }
 
     //eth withdraw
     else if(pathName == '/eth/withdraw'){
-      console.log('get eth withdraw,URl: ' + request.url);
+      util.log('get eth withdraw,URl: ' + request.url);
       var myAddr = se["eth-myaddress"];
       var contractAddr = se["eth-muladdress"];
       var myPrivatekey = se["eth-privatekey"];
@@ -255,31 +247,27 @@ function handler(request, response) {
             if(!isInform){
               var verifyNodes = await getVerifiers();
               for(var i = 0;i < verifyNodes.length;i++){
-                if(verifyNodes[i].owner == se["producer-name"]){
-                  runDatxCmd("cldatx push action datxos.extra setdoing '[\"" + trxid + "\",\"" + nodeName + "\",\"" + se["producer-name"] + "\"]' -p " + se["producer-name"]);
+                if(verifyNodes[i].account == se["producer-name"]){
+                  util.runDatxCmd("cldatx push action datxos.extra setdoing '[\"" + trxid + "\",\"" + nodeName + "\",\"" + se["producer-name"] + "\"]' -p " + se["producer-name"]);
                   ethapi.withdraw(myAddr,contractAddr,to,parseInt(value*1e18),myPrivatekey,ethapi.fromAscii(trxid));
                   continue;
                 }
 
                 var URL = verifyNodes[i].url + '/eth/withdraw?trxid=' + trxid + '&to=' + to + '&value=' + value + '&isInform=true&sign=' + sign + '&nodeName=' + nodeName;
                 httpClient.requestAsync(URL,'GET',null,function (error, response, body) {
-                  if(error) console.log(error.toString());
+                  if(error) util.log(error.toString());
                 });
               }
             }
             else{
-              runDatxCmd("cldatx push action datxos.extra setdoing '[\"" + trxid + "\",\"" + nodeName + "\",\"" + se["producer-name"] + "\"]' -p " + se["producer-name"]);
+              util.runDatxCmd("cldatx push action datxos.extra setdoing '[\"" + trxid + "\",\"" + nodeName + "\",\"" + se["producer-name"] + "\"]' -p " + se["producer-name"]);
               ethapi.withdraw(myAddr,contractAddr,to,parseInt(value*1e18),myPrivatekey,ethapi.fromAscii(trxid));
             }
 
             redis.client.set(trxid,"done");
-            response.writeHead(200);
-            response.write('success');
-            response.end();
+            rep(response,200,'success');
           }catch(e){
-            response.writeHead(500);
-            response.write('Error:' + e.toString());
-            response.end();
+            rep(response,500,'Error:' + e.toString());
           }
           })();
         }
@@ -287,14 +275,12 @@ function handler(request, response) {
     }
 
     else if(pathName == '/eos/getAccount'){
-      response.writeHead(200);
-      response.write(se["eos-account"]);
-      response.end();
+      rep(response,200,se["eos-account"]);
     }
 
     //propose
     else if(pathName == '/eos/withdraw'){
-      console.log('get eos withdraw,URl: ' + request.url);
+      util.log('get eos withdraw,URl: ' + request.url);
       var proposer = se["eos-account"]; 
       var ProvidedKey = se["eos-privateKey"]
       var auths = []; 
@@ -327,7 +313,7 @@ function handler(request, response) {
             //check extract right
             checkResult = await checkExtractRight(nodeName,trxid);
             if(!checkResult){
-              throw new Error('Extract rejected,trxid:' + txid);
+              throw new Error('Extract rejected,trxid:' + trxid);
             }
 
             if(await redis.getAsync(trxid) == "done"){
@@ -336,7 +322,7 @@ function handler(request, response) {
 
             var verifyNodes = await getVerifiers();
             for (var i = 0; i < verifyNodes.length; i++){
-              if(verifyNodes[i].owner == se["producer-name"]){
+              if(verifyNodes[i].account == se["producer-name"]){
                 auths.push({actor: se["eos-account"], permission: 'active'});
                 continue;
               }
@@ -347,43 +333,44 @@ function handler(request, response) {
                 auths.push({actor: result.data, permission: 'active'});
               }
             }
-            runDatxCmd("cldatx push action datxos.extra setdoing '[\"" + trxid + "\",\"" + nodeName + "\",\"" + se["producer-name"] + "\"]' -p " + se["producer-name"]);
+            util.log("proposer auths count is" + auths.length);
+            util.runDatxCmd("cldatx push action datxos.extra setdoing '[\"" + trxid + "\",\"" + nodeName + "\",\"" + se["producer-name"] + "\"]' -p " + se["producer-name"]);
             var proposeName = await eosapi.propose(proposer,MultiSigAccount,to,value + ' EOS',trxid,auths,ProvidedKey);
-            console.log('proposeName for ' + trxid + ' is ' + proposeName);
+            util.log('proposeName for ' + trxid + ' is ' + proposeName);
+
+            //just for now,should use a delay queue
+            util.log("wait 10 sec,make sure this propose broadcast well")
+            await sleep(10000);
             //broadcast to other nodes
             for (var i = 0; i < verifyNodes.length; i++){
-              if(verifyNodes[i].owner == se["producer-name"]){
+              if(verifyNodes[i].account == se["producer-name"]){
                 eosapi.confirm(proposer,proposeName,proposer,ProvidedKey);
                 continue;
               }
 
               var URL = verifyNodes[i].url + '/eos/confirm?proposer=' + proposer + '&proposeName=' + proposeName + '&trxid=' + trxid + '&nodeName=' + nodeName + '&sign=' + sign;;
-              console.log('request eos confirm,url:' + URL);
+              util.log('request eos confirm,url:' + URL);
               httpClient.requestAsync(URL,'GET',null,function (error, response, body) {
-                if (error) console.log(error.toString());
+                if (error) util.log(error.toString());
               });
             }
 
-            //wait 8 second then exec
+            //wait 15 second then exec
             setTimeout(function(proposer,proposeName,proposer,ProvidedKey,response){
-              eosapi.exec(proposer,proposeName,proposer,ProvidedKey).then(result =>{    
-                response.writeHead(200);
+              eosapi.exec(proposer,proposeName,proposer,ProvidedKey).then(result =>{ 
                 if(result && result.transaction_id){
-                  response.write(result.transaction_id);
                   redis.client.set(trxid,"done");
+                  rep(response,200,result.transaction_id);
                 }
                 else{
-                  response.write(result);
+                  util.log("eos withdraw err happened:" + result.toString());
+                  rep(response,200,result);
                 }
-                response.end();
-
               })       
-            },8000,proposer,proposeName,proposer,ProvidedKey,response);
+            },15000,proposer,proposeName,proposer,ProvidedKey,response);
           }catch(e){
-            console.log('Error:' + e.toString());
-            response.writeHead(500);
-            response.write('Error:' + e.toString());
-            response.end();
+            util.log('Error:' + e.toString());
+            rep(response,500,'Error:' + e.toString());
           }
           })();
         }
@@ -392,7 +379,7 @@ function handler(request, response) {
 
     //confirm
     else if(pathName == '/eos/confirm'){
-      console.log('get eos confirm,URL:' + request.url);
+      util.log('get eos confirm,URL:' + request.url);
       var proposer = '';
       var proposeName = '';
       var trxid = '';
@@ -435,23 +422,21 @@ function handler(request, response) {
             var from = action.from;
             var quantity = action.quantity;
 
-            if(from != se["eos-mulAccount"])  throw new Error('transcation rejected,trxid:' + trxid);
+            if(from != se["eos-mulAccount"])  throw new Error('transcation rejected,trxid:' + trxid + ",from is " + from);
             let{to,value,symbol} = await checkDATXWithdraw(trxid);
             var checkResult = (to == to1 && quantity == value.toString() + ' ' + symbol.replace('D',''));
-            if(!checkResult)  throw new Error('transcation rejected,trxid:' + trxid);
+            if(!checkResult) throw new Error('transcation rejected,trxid:' + trxid + ",to is " + to + ",value is " + value);
 
             var result = await eosapi.confirm(proposer,proposeName,se["eos-account"],se["eos-privateKey"]);
-            runDatxCmd("cldatx push action datxos.extra setdoing '[\"" + trxid + "\",\"" + nodeName + "\",\"" + se["producer-name"] + "\"]' -p " + se["producer-name"]);
+            util.runDatxCmd("cldatx push action datxos.extra setdoing '[\"" + trxid + "\",\"" + nodeName + "\",\"" + se["producer-name"] + "\"]' -p " + se["producer-name"]);
             redis.client.set(trxid,"done");
-            console.log('eos confirmed,datx trxid:' + trxid);
+            util.log('eos confirmed,datx trxid:' + trxid);
             response.writeHead(200,{'Content-Type': 'application/json'});
             response.write(JSON.stringify(result));
             response.end();
           }catch(e){
-            console.log('Error:' + e.toString());
-            response.writeHead(500);
-            response.write('Error:' + e.toString());
-            response.end();
+            util.log('Error:' + e.toString());
+            rep(response,500,'Error:' + e.toString());
           }
           })();
         } 
@@ -459,24 +444,18 @@ function handler(request, response) {
     }
   }
   catch (e) {
-    console.log('Error:' + e.toString());
-    response.writeHead(500);
-    response.write('Error:' + e.toString());
-    response.end();
+    util.log('Error:' + e.toString());
+    rep(response,500,'Error:' + e.toString());
   }
 }
 
-function sleep(time) {
-  return new Promise(function (resolve, reject) {
-      setTimeout(function () {
-          resolve();
-      }, time);
-  })
+function sleep(ms) {
+  return new Promise(resolve => setTimeout(resolve, ms));
 };
 
 async function getVerifiers(){
   var verifyNodes = await httpClient.requestWithOvertime('http://' + se["http-server-address"] + '/v1/chain/get_table_rows',3000,'POST',
-    '{"scope":"datxos","code":"datxos","table":"verifiers","json":"true","limit":30}');
+    '{"scope":"datxos.extra","code":"datxos.extra","table":"verifier","json":"true","limit":30}');
   verifyNodes = JSON.parse(verifyNodes.data).rows;
   return verifyNodes;
 }
@@ -493,15 +472,15 @@ async function btcGatherSign(trxSerialize,trxid,nodeName,sign,IsTestnet){
   var trx = bitcoinapi.getTrxFromHex(returnVal);
   var verifyNodes = await getVerifiers();
   for(var i = 0;i < verifyNodes.length;i++){
-    if(verifyNodes[i].owner == se["producer-name"]){
+    if(verifyNodes[i].account == se["producer-name"]){
       trx = await bitcoinapi.signTrx(trx,se["btc-wif"],se["btc-mulscript"],{IsTestnet:IsTestnet})
       returnVal = trx.toHex();
       continue;
     };
     var URL = verifyNodes[i].url + '/btc/signTrx?trxid=' + trxid + '&trxSerialize=' + returnVal + '&isTestnet=' + IsTestnet +  '&nodeName=' + nodeName + '&sign=' + sign;
-    console.log('btc request others to sign,url:' + URL);
+    util.log('btc request others to sign,url:' + URL);
     var result = await httpClient.requestWithOvertime(URL,10000,'GET');
-    if(!result.result)console.log(result.errmsg);
+    if(!result.result)util.log(result.errmsg);
     if(result.result){               
       //check return trx
       var isSame = false;
@@ -569,7 +548,7 @@ async function checkRequestSIgn(nodeName,sign,data){
 
   var verifyNodes = await getVerifiers();
   for(var i = 0;i < verifyNodes.length; i++){
-    if(nodeName == verifyNodes[i].owner){
+    if(nodeName == verifyNodes[i].account){
       var pubkey = verifyNodes[i].verifier_key;
       pubkey = 'EOS' + pubkey.substring(4);
       return eosapi.EccVerify(sign,data,pubkey);
@@ -578,7 +557,7 @@ async function checkRequestSIgn(nodeName,sign,data){
 
   var produceNodes = await getProducers();
   for(var i = 0;i < produceNodes.length; i++){
-    if(nodeName == produceNodes[i].owner){
+    if(nodeName == produceNodes[i].account){
       var pubkey = produceNodes[i].producer_key;
       return eosapi.EccVerify(sign,data,pubkey);
     }
@@ -598,7 +577,6 @@ async function checkExtractRight(nodeName,trxid){
         return nodeName == records[i].producer;
       }
     }
-    
     return false;
   }
   catch(e){
@@ -606,36 +584,10 @@ async function checkExtractRight(nodeName,trxid){
   }
 }
 
-function runDatxCmd(cli){
-  exec(cli,{encoding:'utf8'},function (err,stdout,stderr){
-    if (err){
-        if(err.message.indexOf('Locked wallet') !== -1){
-          let {wname,wpassword} = INI.getWallet();
-          exec('cldatx wallet unlock -n ' + wname + ' --password ' + wpassword,{encoding:'utf8'},function (err,stdout,stderr){
-            if(err){
-                console.log(err.message);
-                return err.message;
-            }else{
-                exec(cli,{encoding:'utf8'},function (err,stdout,stderr){
-                    if(err){
-                        console.log(err.message);
-                        return err.message;
-                    }
-                    else{
-                        return stdout;
-                    }
-                });
-            }
-          });
-        }else{
-            console.log(err.message);
-            return err.message;
-        }
-    }else{
-        return stdout;
-    }
-    
-  })
+function rep(response,head,msg){
+  response.writeHead(head);
+  response.write(msg);
+  response.end();
 }
 
 module.exports = {

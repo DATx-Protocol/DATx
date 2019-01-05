@@ -9,6 +9,8 @@ const chainId = se["eos-chainid"];
 const httpEndpoint = se["eos-endpoint"];
 const eos = Eos({httpEndpoint, chainId, keyProvider: () => userProvidedKey,expireInSeconds: 600});
 
+const util = require("../lib/util")
+
 let userProvidedKey = null;
 
 async function propose(proposer, MultiSigAccount, to, value, memo, auths, ProvidedKey) {
@@ -18,8 +20,8 @@ async function propose(proposer, MultiSigAccount, to, value, memo, auths, Provid
 
   msig = await eos.contract('eosio.msig');
   randomName = String(Math.round(Math.random() * 1e12)).replace(/[0,6-9]/g, '');
-  result = await msig.propose(proposer, randomName, auths, transfer.transaction.transaction);
-
+  result = await msig.propose(proposer, randomName, auths, transfer.transaction.transaction,{authorization: proposer + '@active'});
+  util.log("propose result is :" + JSON.stringify(result));
   return randomName;
 }
 
@@ -29,6 +31,8 @@ async function confirm(propser, proposeName, actor, ProvidedKey) {
   confirm = await msig.approve(
       propser, proposeName, {actor: actor, permission: 'active'},
       {authorization: actor + '@active'});
+
+  util.log("confirm result is :" + JSON.stringify(confirm));
   return confirm;
 }
 
